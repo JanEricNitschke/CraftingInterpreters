@@ -75,7 +75,7 @@
               <manifest>
                 <addClasspath>true</addClasspath>
                 <classpathPrefix>src/</classpathPrefix>
-                <mainClass>craftinginterpreters.App</mainClass>
+                <mainClass>craftinginterpreters.lox.Lox</mainClass>
               </manifest>
             </archive>
           </configuration>
