@@ -1,0 +1,26 @@
+# This workflow will run the tests on the java version of tictactoe
+
+name: java
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./crafting-interpreters
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
+    - name: Setup java
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'oracle' # See 'Supported distributions' for available options
+        java-version: '20'
+    - name: Build with Maven
+      run: mvn --batch-mode --update-snapshots package
