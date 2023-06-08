@@ -120,7 +120,7 @@ public class Scanner {
                 } else if (isAlpha(c)) {
                     identifier();
                 } else {
-                    Lox.error(line, "Unexpected character: '" + c + "''.");
+                    Lox.error(line, " at '" + c + "'", "Unexpected character.");
                     break;
                 }
         }
@@ -161,7 +161,7 @@ public class Scanner {
             advance();
         }
         if (isAtEnd()) {
-            Lox.error(line, "Unterminated string.");
+            Lox.error(line, "", "Unterminated string.");
         }
 
         advance(); // The closing ".
