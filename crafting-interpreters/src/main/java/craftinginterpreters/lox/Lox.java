@@ -55,6 +55,7 @@ public class Lox {
         Scanner scanner = new Scanner(source);
         List<Token> tokens = scanner.scanTokens();
 
+        // Stop of there was a scanning error.
         if (hadError) {
             return;
         }
@@ -63,6 +64,14 @@ public class Lox {
         List<Stmt> statements = parser.parse();
 
         // Stop if there was a syntax error
+        if (hadError) {
+            return;
+        }
+
+        Resolver resolver = new Resolver(interpreter);
+        resolver.resolve(statements);
+
+        // Stop if there was a resolution error.
         if (hadError) {
             return;
         }
