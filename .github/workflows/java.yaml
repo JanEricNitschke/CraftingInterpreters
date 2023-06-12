@@ -1,4 +1,4 @@
-# This workflow will run the tests on the java version of tictactoe
+# This workflow will build the java interpreter of lox.
 
 name: java
 
