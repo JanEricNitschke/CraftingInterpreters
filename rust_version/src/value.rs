@@ -1,4 +1,1 @@
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
-pub enum Value {
-    Number(f64),
-}
+pub type Value = f64;
