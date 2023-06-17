@@ -137,6 +137,7 @@ impl<'a> Scanner<'a> {
                 }
                 b'"' => return self.string(),
                 c if c.is_ascii_digit() => return self.number(),
+                c if c.is_ascii_alphabetic() || c == &b'_' => return self.identifier(),
                 _ => return self.error_token("Unexpected character."),
             },
         };
@@ -216,6 +217,67 @@ impl<'a> Scanner<'a> {
         }
 
         self.make_token(TokenKind::Number)
+    }
+
+    fn identifier(&mut self) -> Token<'a> {
+        while self
+            .peek()
+            .map(|c| c.is_ascii_alphanumeric() || c == &b'_')
+            .unwrap_or(false)
+        {
+            self.advance();
+        }
+        let token_kind = self.identifier_type();
+        self.make_token(token_kind)
+    }
+
+    fn identifier_type(&mut self) -> TokenKind {
+        match self.source[self.start] {
+            b'a' => self.check_keyword(1, "nd", TokenKind::And),
+            b'c' => self.check_keyword(1, "lass", TokenKind::Class),
+            b'e' => self.check_keyword(1, "lse", TokenKind::Else),
+            b'i' => self.check_keyword(1, "f", TokenKind::If),
+            b'n' => self.check_keyword(1, "nil", TokenKind::Nil),
+            b'o' => self.check_keyword(1, "r", TokenKind::Or),
+            b'p' => self.check_keyword(1, "rint", TokenKind::Print),
+            b's' => self.check_keyword(1, "uper", TokenKind::Super),
+            b'v' => self.check_keyword(1, "var", TokenKind::Var),
+            b'w' => self.check_keyword(1, "hile", TokenKind::While),
+            b'f' => {
+                if self.current - self.start > 1 {
+                    match self.source[self.start + 1] {
+                        b'a' => self.check_keyword(2, "lse", TokenKind::False),
+                        b'o' => self.check_keyword(2, "r", TokenKind::For),
+                        b'u' => self.check_keyword(2, "n", TokenKind::Fun),
+                        _ => TokenKind::Identifier,
+                    }
+                } else {
+                    TokenKind::Identifier
+                }
+            }
+            b't' => {
+                if self.current - self.start > 1 {
+                    match self.source[self.start + 1] {
+                        b'h' => self.check_keyword(2, "is", TokenKind::This),
+                        b'r' => self.check_keyword(2, "ue", TokenKind::True),
+                        _ => TokenKind::Identifier,
+                    }
+                } else {
+                    TokenKind::Identifier
+                }
+            }
+            _ => TokenKind::Identifier,
+        }
+    }
+
+    fn check_keyword(&mut self, start: usize, rest: &str, kind: TokenKind) -> TokenKind {
+        let from = self.source.len().min(self.start + start);
+        let to = self.source.len().min(from + rest.len());
+        if &self.source[from..to] == rest.as_bytes() {
+            kind
+        } else {
+            TokenKind::Identifier
+        }
     }
 
     fn peek(&self) -> Option<&u8> {
