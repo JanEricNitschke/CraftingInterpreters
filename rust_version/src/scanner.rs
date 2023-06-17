@@ -6,7 +6,7 @@ use crate::types::Line;
 #[derive(Shrinkwrap, PartialEq, Eq, Clone, Copy)]
 pub struct TokenLength(pub usize);
 
-#[derive(IntoPrimitive, TryFromPrimitive, PartialEq, Eq, Clone, Debug)]
+#[derive(IntoPrimitive, TryFromPrimitive, PartialEq, Eq, Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum TokenKind {
     // Single-Character Tokens.
@@ -65,10 +65,17 @@ impl std::fmt::Display for TokenKind {
     }
 }
 
+#[derive(Clone)]
 pub struct Token<'a> {
     pub kind: TokenKind,
     pub lexeme: &'a [u8],
     pub line: Line,
+}
+
+impl<'a> Token<'a> {
+    pub fn as_str(&'a self) -> &'a str {
+        std::str::from_utf8(self.lexeme).unwrap()
+    }
 }
 
 pub struct Scanner<'a> {
@@ -237,7 +244,7 @@ impl<'a> Scanner<'a> {
             b'c' => self.check_keyword(1, "lass", TokenKind::Class),
             b'e' => self.check_keyword(1, "lse", TokenKind::Else),
             b'i' => self.check_keyword(1, "f", TokenKind::If),
-            b'n' => self.check_keyword(1, "nil", TokenKind::Nil),
+            b'n' => self.check_keyword(1, "il", TokenKind::Nil),
             b'o' => self.check_keyword(1, "r", TokenKind::Or),
             b'p' => self.check_keyword(1, "rint", TokenKind::Print),
             b's' => self.check_keyword(1, "uper", TokenKind::Super),
@@ -289,9 +296,11 @@ impl<'a> Scanner<'a> {
     }
 
     fn make_token(&self, kind: TokenKind) -> Token<'a> {
+        let to = self.current.min(self.source.len());
+        let from = to.min(self.start);
         Token {
             kind,
-            lexeme: &self.source[self.start..self.current.min(self.source.len())],
+            lexeme: &self.source[from..to],
             line: self.line,
         }
     }

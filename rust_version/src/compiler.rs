@@ -1,36 +1,342 @@
-
-use thiserror::Error;
+use num_enum::{IntoPrimitive, TryFromPrimitive};
+use trace::trace;
+trace::init_depth_var!();
 
 use crate::{
-    scanner::{Scanner, TokenKind},
+    chunk::{Chunk, OpCode},
+    scanner::{Scanner, Token, TokenKind},
     types::Line,
+    value::Value,
 };
 
-#[derive(Error, Debug)]
-pub enum Error {}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, TryFromPrimitive, IntoPrimitive)]
+#[repr(u8)]
+enum Precedence {
+    None,
+    Assignment, // =
+    Or,         // or
+    And,        // and
+    Equality,   // == !=
+    Comparison, // < > <= >=
+    Term,       // + -
+    Factor,     // * /
+    Unary,      // ! -
+    Call,       // . ()
+    Primary,
+}
 
-pub type Result<T = (), E = Error> = std::result::Result<T, E>;
+type ParseFn<'a> = fn(&mut Compiler<'a>) -> ();
 
-pub fn compile(source: &[u8]) -> Result {
-    let mut scanner = Scanner::new(source);
-    let mut line = Line(0);
-    loop {
-        let token = scanner.scan();
-        if token.line != line {
-            print!("{:>4}", *token.line);
-            line = token.line;
-        } else {
-            print!("   |");
-        }
-        println!(
-            "{:>13} '{}'",
-            token.kind,
-            std::str::from_utf8(token.lexeme).unwrap()
-        );
+struct Rule<'a> {
+    prefix: Option<ParseFn<'a>>,
+    infix: Option<ParseFn<'a>>,
+    precedence: Precedence,
+}
 
-        if token.kind == TokenKind::Eof {
-            break;
+impl<'a> Default for Rule<'a> {
+    fn default() -> Self {
+        Self {
+            prefix: Default::default(),
+            infix: Default::default(),
+            precedence: Precedence::None,
         }
     }
-    Ok(())
+}
+
+macro_rules! make_rules {
+    (@parse_fn None) => { None };
+    (@parse_fn $prefix:ident) => { Some(Compiler::$prefix) };
+
+    ($($token:ident = [$prefix:ident, $infix:ident, $precedence:ident]),* $(,)?) => {{
+        // Horrible hack to pre-fill the array with *something* before assigning the right values based on the macro input
+        // Needed because `Rule` cannot be `Copy` (due to `fn`s)
+        // If the tokens get input into the makro in the same order
+        // That they appear in the enum then the loop is not needed.
+        let mut rules = [$(Rule { prefix: make_rules!(@parse_fn $prefix), infix: make_rules!(@parse_fn $infix), precedence: Precedence::$precedence }),*];
+        $(
+            rules[TokenKind::$token as usize] = Rule {
+                prefix: make_rules!(@parse_fn $prefix),
+                infix: make_rules!(@parse_fn $infix),
+                precedence: Precedence::$precedence
+            };
+        )*
+        rules
+    }};
+}
+
+type Rules<'a> = [Rule<'a>; 42];
+
+// Can't be static because the associated function types include lifetimes
+#[rustfmt::skip]
+fn make_rules<'a>() -> Rules<'a> {
+    make_rules!(
+        LeftParen    = [grouping, None,   None      ],
+        RightParen   = [None,     None,   None      ],
+        LeftParen    = [grouping, None,   None      ],
+        RightParen   = [None,     None,   None      ],
+        LeftBrace    = [None,     None,   None      ],
+        RightBrace   = [None,     None,   None      ],
+        Comma        = [None,     None,   None      ],
+        Dot          = [None,     None,   None      ],
+        Minus        = [unary,    binary, Term      ],
+        Plus         = [None,     binary, Term      ],
+        Semicolon    = [None,     None,   None      ],
+        Slash        = [None,     binary, Factor    ],
+        Star         = [None,     binary, Factor    ],
+        Bang         = [unary,    None,   None      ],
+        BangEqual    = [None,     binary, Equality  ],
+        Equal        = [None,     None,   None      ],
+        EqualEqual   = [None,     binary, Equality  ],
+        Greater      = [None,     binary, Comparison],
+        GreaterEqual = [None,     binary, Comparison],
+        Less         = [None,     binary, Comparison],
+        LessEqual    = [None,     binary, Comparison],
+        Identifier   = [None,     None,   None      ],
+        String       = [None,     None,   None      ],
+        Number       = [number,   None,   None      ],
+        And          = [None,     None,   None      ],
+        Class        = [None,     None,   None      ],
+        Else         = [None,     None,   None      ],
+        False        = [literal,  None,   None      ],
+        For          = [None,     None,   None      ],
+        Fun          = [None,     None,   None      ],
+        If           = [None,     None,   None      ],
+        Nil          = [literal,  None,   None      ],
+        Or           = [None,     None,   None      ],
+        Print        = [None,     None,   None      ],
+        Return       = [None,     None,   None      ],
+        Super        = [None,     None,   None      ],
+        This         = [None,     None,   None      ],
+        True         = [literal,  None,   None      ],
+        Var          = [None,     None,   None      ],
+        While        = [None,     None,   None      ],
+        Error        = [None,     None,   None      ],
+        Eof          = [None,     None,   None      ],
+    )
+}
+
+pub struct Compiler<'a> {
+    scanner: Scanner<'a>,
+    previous: Option<Token<'a>>,
+    current: Option<Token<'a>>,
+    had_error: bool,
+    panic_mode: bool,
+    chunk: Chunk,
+    rules: Rules<'a>,
+}
+
+impl<'a> Compiler<'a> {
+    #[must_use]
+    fn new(source: &'a [u8]) -> Self {
+        Self {
+            chunk: Chunk::new("<main>"),
+            scanner: Scanner::new(source),
+            previous: None,
+            current: None,
+            had_error: false,
+            panic_mode: false,
+            rules: make_rules(),
+        }
+    }
+
+    fn compile_(mut self) -> Option<Chunk> {
+        self.advance();
+        self.expression();
+        self.consume(TokenKind::Eof, "Expect end of expression.");
+        self.end();
+        if self.had_error {
+            None
+        } else {
+            Some(self.chunk)
+        }
+    }
+
+    pub fn compile(source: &'a [u8]) -> Option<Chunk> {
+        Self::new(source).compile_()
+    }
+
+    fn advance(&mut self) {
+        self.previous = std::mem::take(&mut self.current);
+        loop {
+            let token = self.scanner.scan();
+            self.current = Some(token);
+            if self.current.as_ref().unwrap().kind != TokenKind::Error {
+                break;
+            }
+            self.error_at_current(&self.current.as_ref().unwrap().as_str().to_string());
+        }
+    }
+
+    fn consume(&mut self, kind: TokenKind, msg: &str) {
+        if self.current.as_ref().map(|t| &t.kind) == Some(&kind) {
+            self.advance();
+            return;
+        }
+        self.error_at_current(msg);
+    }
+
+    #[trace]
+    fn expression(&mut self) {
+        self.parse_precedence(Precedence::Assignment);
+    }
+
+    #[trace]
+    fn parse_precedence(&mut self, precedence: Precedence) {
+        self.advance();
+        if let Some(prefix_rule) = self.get_rule(self.previous.as_ref().unwrap().kind).prefix {
+            prefix_rule(self);
+            while precedence
+                < self
+                    .get_rule(self.current.as_ref().unwrap().kind)
+                    .precedence
+            {
+                self.advance();
+                let infix_rule = self
+                    .get_rule(self.previous.as_ref().unwrap().kind)
+                    .infix
+                    .unwrap();
+                infix_rule(self);
+            }
+        } else {
+            self.error("Expect expression.");
+        }
+    }
+
+    fn line(&self) -> Line {
+        self.previous.as_ref().unwrap().line
+    }
+
+    fn emit_byte<T>(&mut self, byte: T, line: Line)
+    where
+        T: Into<u8>,
+    {
+        self.current_chunk().write(byte, line)
+    }
+
+    fn emit_bytes<T1, T2>(&mut self, byte1: T1, byte2: T2, line: Line)
+    where
+        T1: Into<u8>,
+        T2: Into<u8>,
+    {
+        self.current_chunk().write(byte1, line);
+        self.current_chunk().write(byte2, line);
+    }
+
+    fn emit_return(&mut self) {
+        self.emit_byte(OpCode::Return, self.line());
+    }
+
+    fn end(&mut self) {
+        self.emit_return();
+
+        #[cfg(feature = "print_code")]
+        if !self.had_error {
+            println!("{:?}", self.chunk);
+        }
+    }
+
+    fn current_chunk(&mut self) -> &mut Chunk {
+        &mut self.chunk
+    }
+
+    fn emit_constant<T>(&mut self, value: T)
+    where
+        T: Into<Value>,
+    {
+        if !self.chunk.write_constant(value.into(), self.line()) {
+            self.error("Too many constants in one chunk.");
+        }
+    }
+
+    #[trace]
+    fn number(&mut self) {
+        let value: f64 = self.previous.as_ref().unwrap().as_str().parse().unwrap();
+        self.emit_constant(value);
+    }
+
+    #[trace]
+    fn grouping(&mut self) {
+        self.expression();
+        self.consume(TokenKind::RightParen, "Expect ')' after expression.");
+    }
+
+    #[trace]
+    fn unary(&mut self) {
+        let operator = self.previous.as_ref().unwrap().kind;
+        let line = self.line();
+
+        self.parse_precedence(Precedence::Unary);
+
+        match operator {
+            TokenKind::Minus => self.emit_byte(OpCode::Negate, line),
+            TokenKind::Bang => self.emit_byte(OpCode::Not, line),
+            _ => unreachable!("Unkown unary operator: {}", operator),
+        }
+    }
+
+    #[trace]
+    fn binary(&mut self) {
+        let operator = self.previous.as_ref().unwrap().kind;
+        let line = self.line();
+        let rule = self.get_rule(operator);
+
+        self.parse_precedence(
+            Precedence::try_from_primitive(u8::from(rule.precedence) + 1).unwrap(),
+        );
+
+        match operator {
+            TokenKind::BangEqual => self.emit_bytes(OpCode::Equal, OpCode::Not, line),
+            TokenKind::EqualEqual => self.emit_byte(OpCode::Equal, line),
+            TokenKind::Greater => self.emit_byte(OpCode::Greater, line),
+            TokenKind::GreaterEqual => self.emit_bytes(OpCode::Less, OpCode::Not, line),
+            TokenKind::Less => self.emit_byte(OpCode::Less, line),
+            TokenKind::LessEqual => self.emit_bytes(OpCode::Greater, OpCode::Not, line),
+            TokenKind::Plus => self.emit_byte(OpCode::Add, line),
+            TokenKind::Minus => self.emit_byte(OpCode::Substract, line),
+            TokenKind::Star => self.emit_byte(OpCode::Multiply, line),
+            TokenKind::Slash => self.emit_byte(OpCode::Divide, line),
+            _ => unreachable!("Unkown binary operator: {}", operator),
+        }
+    }
+
+    #[trace]
+    fn literal(&mut self) {
+        let literal = self.previous.as_ref().unwrap().kind;
+        match literal {
+            TokenKind::False => self.emit_byte(OpCode::False, self.line()),
+            TokenKind::Nil => self.emit_byte(OpCode::Nil, self.line()),
+            TokenKind::True => self.emit_byte(OpCode::True, self.line()),
+            _ => unreachable!("Unkown literal: {}", literal),
+        }
+    }
+
+    fn get_rule(&self, operator: TokenKind) -> &Rule<'a> {
+        &self.rules[operator as usize]
+    }
+
+    fn error_at_current(&mut self, msg: &str) {
+        self.error_at(self.current.clone(), msg);
+    }
+
+    fn error(&mut self, msg: &str) {
+        self.error_at(self.previous.clone(), msg);
+    }
+
+    #[inline]
+    fn error_at(&mut self, token: Option<Token>, msg: &str) {
+        if self.panic_mode {
+            return;
+        }
+        self.panic_mode = true;
+        if let Some(token) = token.as_ref() {
+            eprint!("[line {}] Error", *token.line);
+            if token.kind == TokenKind::Eof {
+                eprint!(" at end");
+            } else if token.kind != TokenKind::Error {
+                eprint!(" at '{}'", token.as_str())
+            }
+            eprintln!(": {}", msg);
+        }
+        self.had_error = true;
+    }
 }
