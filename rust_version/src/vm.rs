@@ -77,7 +77,6 @@ impl VM {
             }
             match OpCode::try_from(instruction).expect("Internal error: unrecognized opcode") {
                 OpCode::Return => {
-                    println!("{}", self.stack.pop().expect("stack underflow"));
                     return InterpretResult::Ok;
                 }
                 OpCode::Constant => {
@@ -89,7 +88,7 @@ impl VM {
                     self.stack.push(value)
                 }
                 OpCode::Negate => {
-                    let value = self.stack.last_mut().expect("Stack underflow in OP_NEGATE");
+                    let value = self.stack.last_mut().expect("Stack underflow in OP_NEGATE.");
                     match value {
                         Value::Number(n) => *n = -*n,
                         _ => {
@@ -99,14 +98,14 @@ impl VM {
                     }
                 }
                 OpCode::Not => {
-                    let value = self.stack.pop().expect("Stack underflow in OP_NOT").is_falsey();
+                    let value = self.stack.pop().expect("Stack underflow in OP_NOT.").is_falsey();
                     self.stack.push(value.into())
                 }
                 OpCode::Nil => self.stack.push(Value::Nil),
                 OpCode::True => self.stack.push(Value::Bool(true)),
                 OpCode::False => self.stack.push(Value::Bool(false)),
                 OpCode::Equal => {
-                    let value = self.stack.pop().expect("Stack underflow in OP_EQUAL (first)") == self.stack.pop().expect("Stack underflow in OP_EQUAL (second)");
+                    let value = self.stack.pop().expect("Stack underflow in OP_EQUAL (first).") == self.stack.pop().expect("Stack underflow in OP_EQUAL (second).");
                     self.stack.push(value.into());
                 }
                 OpCode::Add =>  {
@@ -131,6 +130,12 @@ impl VM {
                 OpCode::Divide => binary_op!(self, /),
                 OpCode::Greater => binary_op!(self, >),
                 OpCode::Less => binary_op!(self, <),
+                OpCode::Print => {
+                    println!("{}", self.stack.pop().expect("Stack underflow in OP_PRINT."));
+                }
+                OpCode::Pop => {
+                    self.stack.pop().expect("Stack underflow in OP_POP.");
+                }
                 #[allow(unreachable_patterns)]
                 _ => {}
             };

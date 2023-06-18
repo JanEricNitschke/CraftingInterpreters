@@ -34,6 +34,8 @@ pub enum OpCode {
     Multiply,
     Divide,
 
+    Print,
+    Pop,
     Return,
 }
 
@@ -45,7 +47,7 @@ impl OpCode {
             Constant => 2,
             ConstantLong => 4,
             Negate | Add | Substract | Multiply | Divide | Return | Nil | True | False | Not
-            | Equal | Greater | Less => 1,
+            | Equal | Greater | Less | Print | Pop => 1,
         }
     }
 }
@@ -218,6 +220,8 @@ impl<'a> std::fmt::Debug for InstructionDisassembler<'a> {
             OpCode::Equal => self.debug_simple_opcode(f, "OP_EQUAL"),
             OpCode::Greater => self.debug_simple_opcode(f, "OP_GREATER"),
             OpCode::Less => self.debug_simple_opcode(f, "OP_LESS"),
+            OpCode::Print => self.debug_simple_opcode(f, "OP_PRINT"),
+            OpCode::Pop => self.debug_simple_opcode(f, "OP_POP"),
         }?;
         Ok(())
     }
