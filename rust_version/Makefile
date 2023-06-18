@@ -1,7 +1,7 @@
 CRAFTING_INTERPRETERS ?= ..\reference\craftinginterpreters
 DEBUG_BIN := target\debug\rust_version.exe
 
-test_level := chap18_types
+test_level := chap19_strings
 sources := src/*.rs Cargo.toml
 
 $(DEBUG_BIN): $(sources)

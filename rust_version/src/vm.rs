@@ -109,7 +109,23 @@ impl VM {
                     let value = self.stack.pop().expect("Stack underflow in OP_EQUAL (first)") == self.stack.pop().expect("Stack underflow in OP_EQUAL (second)");
                     self.stack.push(value.into());
                 }
-                OpCode::Add => binary_op!(self, +),
+                OpCode::Add =>  {
+                    let slice_start = self.stack.len()-2;
+                    match &mut self.stack[slice_start..] {
+                        [stack_item @ Value::Number(_), Value::Number(b)] => {
+                            *stack_item = (stack_item.as_f64() + *b).into();
+                            self.stack.pop();
+                        },
+                        [Value::String(a), Value::String(b)] => {
+                            a.push_str(b);
+                            self.stack.pop();
+                        }
+                        _ => {
+                            runtime_error!(self, "Operands must be two numbers or two string.");
+                            return InterpretResult::RuntimeError;
+                        }
+                    }
+                }
                 OpCode::Substract => binary_op!(self, -),
                 OpCode::Multiply => binary_op!(self, *),
                 OpCode::Divide => binary_op!(self, /),
