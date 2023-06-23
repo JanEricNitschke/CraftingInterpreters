@@ -3,7 +3,7 @@ use trace::trace;
 trace::init_depth_var!();
 
 use crate::{
-    chunk::{Chunk, OpCode},
+    chunk::{Chunk, ConstantLongIndex, OpCode},
     scanner::{Scanner, Token, TokenKind as TK},
     types::Line,
     value::Value,
@@ -25,7 +25,7 @@ enum Precedence {
     Primary,
 }
 
-type ParseFn<'a> = fn(&mut Compiler<'a>) -> ();
+type ParseFn<'a> = fn(&mut Compiler<'a>, bool) -> ();
 
 struct Rule<'a> {
     prefix: Option<ParseFn<'a>>,
@@ -91,8 +91,8 @@ fn make_rules<'a>() -> Rules<'a> {
         GreaterEqual = [None,     binary, Comparison],
         Less         = [None,     binary, Comparison],
         LessEqual    = [None,     binary, Comparison],
-        Identifier   = [None,     None,   None      ],
-        String       = [string,     None,   None      ],
+        Identifier   = [variable, None,   None      ],
+        String       = [string,   None,   None      ],
         Number       = [number,   None,   None      ],
         And          = [None,     None,   None      ],
         Class        = [None,     None,   None      ],
@@ -184,29 +184,43 @@ impl<'a> Compiler<'a> {
             .unwrap_or(false)
     }
 
-    #[trace]
+    // #[trace]
     fn declaration(&mut self) {
-        self.statement();
+        if self.match_(TK::Var) {
+            self.var_declaration();
+        } else {
+            self.statement();
+        }
         if self.panic_mode {
             self.synchronize();
         }
     }
 
-    #[trace]
+    // #[trace]
     fn synchronize(&mut self) {
         self.panic_mode = false;
         while !self.check(TK::Eof) {
             if self.check_previous(TK::Semicolon) {
                 return;
             }
-            if let Some(TK::Class | TK::Fun | TK::Var | TK::For | TK::If | TK::While | TK::Print | TK::Return) = self.current_token_kind() {
+            if let Some(
+                TK::Class
+                | TK::Fun
+                | TK::Var
+                | TK::For
+                | TK::If
+                | TK::While
+                | TK::Print
+                | TK::Return,
+            ) = self.current_token_kind()
+            {
                 return;
             }
             self.advance();
         }
     }
 
-    #[trace]
+    // #[trace]
     fn statement(&mut self) {
         if self.match_(TK::Print) {
             self.print_statement();
@@ -215,7 +229,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    #[trace]
+    // #[trace]
     fn print_statement(&mut self) {
         let line = self.line();
         self.expression();
@@ -223,7 +237,7 @@ impl<'a> Compiler<'a> {
         self.emit_byte(OpCode::Print, line);
     }
 
-    #[trace]
+    // #[trace]
     fn expression_statement(&mut self) {
         let line = self.line();
         self.expression();
@@ -251,18 +265,34 @@ impl<'a> Compiler<'a> {
         self.error_at_current(msg);
     }
 
-    #[trace]
+    // #[trace]
     fn expression(&mut self) {
         self.parse_precedence(Precedence::Assignment);
     }
 
-    #[trace]
+    // #[trace]
+    fn var_declaration(&mut self) {
+        let global = self.parse_variable("Expect variable name.");
+
+        if self.match_(TK::Equal) {
+            self.expression();
+        } else {
+            self.emit_byte(OpCode::Nil, self.line());
+        }
+
+        self.consume(TK::Semicolon, "Expect ';' after variable declaration.");
+
+        self.define_variable(global);
+    }
+
+    // #[trace]
     fn parse_precedence(&mut self, precedence: Precedence) {
         self.advance();
         if let Some(prefix_rule) = self.get_rule(self.previous.as_ref().unwrap().kind).prefix {
-            prefix_rule(self);
+            let can_assign = precedence <= Precedence::Assignment;
+            prefix_rule(self, can_assign);
             while precedence
-                < self
+                <= self
                     .get_rule(self.current.as_ref().unwrap().kind)
                     .precedence
             {
@@ -271,15 +301,43 @@ impl<'a> Compiler<'a> {
                     .get_rule(self.previous.as_ref().unwrap().kind)
                     .infix
                     .unwrap();
-                infix_rule(self);
+                infix_rule(self, can_assign);
             }
+
+            if can_assign && self.match_(TK::Equal) {
+                self.error("Invalid assignment target.")
+            }
+
         } else {
             self.error("Expect expression.");
         }
     }
 
+    fn identifier_constant<S>(&mut self, name: S) -> ConstantLongIndex
+    where
+        S: ToString,
+    {
+        self.current_chunk().make_constant(name.to_string().into())
+    }
+
+    fn parse_variable(&mut self, msg: &str) -> ConstantLongIndex {
+        self.consume(TK::Identifier, msg);
+        self.identifier_constant(self.previous.as_ref().unwrap().as_str().to_string())
+    }
+
+    fn define_variable(&mut self, global: ConstantLongIndex) {
+        if let Ok(short) = u8::try_from(*global) {
+            self.emit_bytes(OpCode::DefineGlobal, short, self.line())
+        } else {
+            self.error("Too many globals!")
+        }
+    }
+
     fn line(&self) -> Line {
-        self.previous.as_ref().unwrap().line
+        match self.previous.as_ref() {
+            Some(x) => x.line,
+            None => Line(0),
+        }
     }
 
     fn emit_byte<T>(&mut self, byte: T, line: Line)
@@ -324,27 +382,46 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    #[trace]
-    fn number(&mut self) {
+    // #[trace]
+    fn number(&mut self, _can_assign: bool) {
         let value: f64 = self.previous.as_ref().unwrap().as_str().parse().unwrap();
         self.emit_constant(value);
     }
 
-    #[trace]
-    fn string(&mut self) {
+    // #[trace]
+    fn string(&mut self, _can_assign: bool) {
         let lexeme = self.previous.as_ref().unwrap().as_str();
         let value = lexeme[1..lexeme.len() - 1].to_string();
         self.emit_constant(value);
     }
 
-    #[trace]
-    fn grouping(&mut self) {
+    fn named_variable<S>(&mut self, name: S, can_assign: bool)
+    where
+        S: ToString {
+            let arg = self.identifier_constant(name);
+            let arg = u8::try_from(*arg).unwrap();
+            if can_assign && self.match_(TK::Equal) {
+                self.expression();
+                self.emit_bytes(OpCode::SetGlobal, arg, self.line());
+            } else {
+            self.emit_bytes(OpCode::GetGlobal, arg, self.line())
+        }
+    }
+
+
+    // #[trace]
+    fn variable(&mut self, can_assign: bool) {
+        self.named_variable(self.previous.as_ref().unwrap().as_str().to_string(), can_assign);
+    }
+
+    // #[trace]
+    fn grouping(&mut self, _can_assign: bool) {
         self.expression();
         self.consume(TK::RightParen, "Expect ')' after expression.");
     }
 
-    #[trace]
-    fn unary(&mut self) {
+    // #[trace]
+    fn unary(&mut self, _can_assign: bool) {
         let operator = self.previous.as_ref().unwrap().kind;
         let line = self.line();
 
@@ -357,8 +434,8 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    #[trace]
-    fn binary(&mut self) {
+    // #[trace]
+    fn binary(&mut self, _can_assign: bool) {
         let operator = self.previous.as_ref().unwrap().kind;
         let line = self.line();
         let rule = self.get_rule(operator);
@@ -382,8 +459,8 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    #[trace]
-    fn literal(&mut self) {
+    // #[trace]
+    fn literal(&mut self, _can_assign: bool) {
         let literal = self.previous.as_ref().unwrap().kind;
         match literal {
             TK::False => self.emit_byte(OpCode::False, self.line()),

@@ -65,7 +65,7 @@ impl std::fmt::Display for TokenKind {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Token<'a> {
     pub kind: TokenKind,
     pub lexeme: &'a [u8],
@@ -78,6 +78,7 @@ impl<'a> Token<'a> {
     }
 }
 
+#[derive(Debug)]
 pub struct Scanner<'a> {
     source: &'a [u8],
     start: usize,
@@ -178,7 +179,7 @@ impl<'a> Scanner<'a> {
                 }
                 Some(b'/') => {
                     if self.peek_next() == Some(&b'/') {
-                        while self.peek().map(|c| c != &b'\n').unwrap_or(false) {
+                        while !matches!(self.peek(), Some(b'\n') | None) {
                             self.advance();
                         }
                     } else {
@@ -248,7 +249,7 @@ impl<'a> Scanner<'a> {
             b'o' => self.check_keyword(1, "r", TokenKind::Or),
             b'p' => self.check_keyword(1, "rint", TokenKind::Print),
             b's' => self.check_keyword(1, "uper", TokenKind::Super),
-            b'v' => self.check_keyword(1, "var", TokenKind::Var),
+            b'v' => self.check_keyword(1, "ar", TokenKind::Var),
             b'w' => self.check_keyword(1, "hile", TokenKind::While),
             b'f' => {
                 if self.current - self.start > 1 {

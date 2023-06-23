@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 #[cfg(feature = "trace_execution")]
 use crate::chunk::InstructionDisassembler;
 use crate::{
@@ -36,6 +38,7 @@ pub struct VM {
     chunk: Option<Chunk>,
     ip: usize,
     stack: Vec<Value>,
+    globals: HashMap<String, Value>,
 }
 
 impl VM {
@@ -45,6 +48,7 @@ impl VM {
             chunk: None,
             ip: 0,
             stack: Vec::with_capacity(256),
+            globals: HashMap::new(),
         }
     }
 
@@ -88,7 +92,10 @@ impl VM {
                     self.stack.push(value)
                 }
                 OpCode::Negate => {
-                    let value = self.stack.last_mut().expect("Stack underflow in OP_NEGATE.");
+                    let value = self
+                        .stack
+                        .last_mut()
+                        .expect("Stack underflow in OP_NEGATE.");
                     match value {
                         Value::Number(n) => *n = -*n,
                         _ => {
@@ -98,29 +105,40 @@ impl VM {
                     }
                 }
                 OpCode::Not => {
-                    let value = self.stack.pop().expect("Stack underflow in OP_NOT.").is_falsey();
+                    let value = self
+                        .stack
+                        .pop()
+                        .expect("Stack underflow in OP_NOT.")
+                        .is_falsey();
                     self.stack.push(value.into())
                 }
                 OpCode::Nil => self.stack.push(Value::Nil),
                 OpCode::True => self.stack.push(Value::Bool(true)),
                 OpCode::False => self.stack.push(Value::Bool(false)),
                 OpCode::Equal => {
-                    let value = self.stack.pop().expect("Stack underflow in OP_EQUAL (first).") == self.stack.pop().expect("Stack underflow in OP_EQUAL (second).");
+                    let value = self
+                        .stack
+                        .pop()
+                        .expect("Stack underflow in OP_EQUAL (first).")
+                        == self
+                            .stack
+                            .pop()
+                            .expect("Stack underflow in OP_EQUAL (second).");
                     self.stack.push(value.into());
                 }
-                OpCode::Add =>  {
-                    let slice_start = self.stack.len()-2;
+                OpCode::Add => {
+                    let slice_start = self.stack.len() - 2;
                     match &mut self.stack[slice_start..] {
                         [stack_item @ Value::Number(_), Value::Number(b)] => {
                             *stack_item = (stack_item.as_f64() + *b).into();
                             self.stack.pop();
-                        },
+                        }
                         [Value::String(a), Value::String(b)] => {
                             a.push_str(b);
                             self.stack.pop();
                         }
                         _ => {
-                            runtime_error!(self, "Operands must be two numbers or two string.");
+                            runtime_error!(self, "Operands must be two numbers or two strings.");
                             return InterpretResult::RuntimeError;
                         }
                     }
@@ -131,11 +149,66 @@ impl VM {
                 OpCode::Greater => binary_op!(self, >),
                 OpCode::Less => binary_op!(self, <),
                 OpCode::Print => {
-                    println!("{}", self.stack.pop().expect("Stack underflow in OP_PRINT."));
+                    println!(
+                        "{}",
+                        self.stack.pop().expect("Stack underflow in OP_PRINT.")
+                    );
                 }
                 OpCode::Pop => {
                     self.stack.pop().expect("Stack underflow in OP_POP.");
                 }
+                OpCode::DefineGlobal => match self.read_constant(false).clone() {
+                    Value::String(name) => {
+                        self.globals.insert(
+                            *name,
+                            self.stack
+                                .last()
+                                .expect("Stack underflow in OP_DEFINE_GLOBAL")
+                                .clone(),
+                        );
+                        self.stack.pop();
+                    }
+                    x => panic!(
+                        "Internal error: non-string operand to OP_DEFINE_GLOBAL: {:?}",
+                        x
+                    ),
+                },
+                OpCode::GetGlobal => match self.read_constant(false).clone() {
+                    Value::String(name) => match self.globals.get(&*name) {
+                        Some(value) => self.stack.push(value.clone()),
+                        None => {
+                            runtime_error!(self, "Undefined variable '{}'.", name);
+                            return InterpretResult::RuntimeError;
+                        }
+                    },
+                    x => panic!(
+                        "Internal error: non-string operand to OP_GET_GLOBAL: {:?}",
+                        x
+                    ),
+                },
+                OpCode::SetGlobal => match self.read_constant(false).clone() {
+                    Value::String(name) => {
+                        if self
+                            .globals
+                            .insert(
+                                *name.clone(),
+                                self.stack
+                                    .last()
+                                    .expect("stack underflow in OP_SET_GLOBAL")
+                                    .clone(),
+                            )
+                            .is_none()
+                        {
+                            self.globals.remove(name.as_ref());
+                            runtime_error!(self, "Undefined variable '{}'.", name);
+                            return InterpretResult::RuntimeError;
+                        }
+                    }
+                    x => panic!(
+                        "Internal error: non-string operand to OP_SET_GLOBAL: {:?}",
+                        x
+                    ),
+                },
                 #[allow(unreachable_patterns)]
                 _ => {}
             };
