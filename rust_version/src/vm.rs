@@ -247,6 +247,20 @@ impl VM {
                         .expect("stack underflow in OP_SET_LOCAL")
                         .clone();
                 }
+                OpCode::JumpIfFalse => {
+                    let offset = self.read_16bit_number("Internal error: missing operand for OP_JUMP_IF_FALSE");
+                    if self.stack.last().expect("stack underflow in OP_JUMP_IF_FALSE").is_falsey() {
+                        self.ip += offset;
+                    }
+                }
+                OpCode::Jump => {
+                    let offset = self.read_16bit_number("Internal error: missing operand for OP_JUMP");
+                    self.ip += offset;
+                }
+                OpCode::Loop => {
+                    let offset = self.read_16bit_number("Internal error: missing operand for OP_LOOP");
+                    self.ip -= offset;
+                }
                 #[allow(unreachable_patterns)]
                 _ => {}
             };
@@ -281,6 +295,10 @@ impl VM {
         (usize::from(self.read_byte(msg)) << 16)
             + (usize::from(self.read_byte(msg)) << 8)
             + (usize::from(self.read_byte(msg)))
+    }
+
+    fn read_16bit_number(&mut self, msg: &str) -> usize {
+        (usize::from(self.read_byte(msg)) << 8) + (usize::from(self.read_byte(msg)))
     }
 
     fn read_constant(&mut self, long: bool) -> &Value {

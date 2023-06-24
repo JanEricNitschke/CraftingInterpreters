@@ -1,8 +1,8 @@
 CRAFTING_INTERPRETERS := ../reference/craftinginterpreters
 DEBUG_BIN := target/debug/rust_version.exe
 
-test_level := chap22_local
-sources := src/*.rs Cargo.toml
+test_level := chap23_jumping
+sources := src/*.rs src/compiler/*.rs Cargo.toml
 
 $(DEBUG_BIN): $(sources)
 	cargo build

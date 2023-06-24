@@ -1,10 +1,12 @@
+use std::process::exit;
+
 use super::{rules::Precedence, Compiler};
 
 use trace::trace;
 trace::init_depth_var!();
 
 use crate::{
-    chunk::{Chunk, OpCode},
+    chunk::{CodeOffset, OpCode},
     scanner::TokenKind as TK,
     types::Line,
 };
@@ -35,10 +37,6 @@ impl<'a> Compiler<'a> {
             Some(x) => x.line,
             None => Line(0),
         }
-    }
-
-    pub(super) fn current_chunk(&mut self) -> &mut Chunk {
-        &mut self.chunk
     }
 
     pub(super) fn match_(&mut self, kind: TK) -> bool {
@@ -122,6 +120,12 @@ impl<'a> Compiler<'a> {
     fn statement(&mut self) {
         if self.match_(TK::Print) {
             self.print_statement();
+        } else if self.match_(TK::For) {
+            self.for_statement();
+        } else if self.match_(TK::If) {
+            self.if_statement();
+        } else if self.match_(TK::While) {
+            self.while_statement();
         } else if self.match_(TK::LeftBrace) {
             self.begin_scope();
             self.block();
@@ -132,10 +136,100 @@ impl<'a> Compiler<'a> {
     }
 
     // #[trace]
+    fn if_statement(&mut self) {
+        let line = self.line();
+        self.consume(TK::LeftParen, "Expect '(' after 'if'.");
+        self.expression();
+        self.consume(TK::RightParen, "Expect ')' after condition");
+
+        let then_jump = self.emit_jump(OpCode::JumpIfFalse);
+        self.emit_byte(OpCode::Pop, line);
+        self.statement();
+
+        let else_jump = self.emit_jump(OpCode::Jump);
+        self.patch_jump(then_jump);
+        self.emit_byte(OpCode::Pop, line);
+        if self.match_(TK::Else) {
+            self.statement()
+        }
+
+        self.patch_jump(else_jump);
+    }
+
+    // #[trace]
     fn print_statement(&mut self) {
         let line = self.line();
         self.expression();
         self.consume(TK::Semicolon, "Expect ';' after value.");
         self.emit_byte(OpCode::Print, line);
+    }
+
+    // #[trace]
+    fn while_statement(&mut self) {
+        let line = self.line();
+        let loop_start = CodeOffset(self.current_chunk().code().len());
+        self.consume(TK::LeftParen, "Expect '(' after 'while'.");
+        self.expression();
+        self.consume(TK::RightParen, "Expect ')' after condition.");
+
+        let exit_jump = self.emit_jump(OpCode::JumpIfFalse);
+        self.emit_byte(OpCode::Pop, line);
+        self.statement();
+        self.emit_loop(loop_start);
+
+        self.patch_jump(exit_jump);
+        self.emit_byte(OpCode::Pop, line)
+    }
+
+    // #[trace]
+    fn for_statement(&mut self) {
+        self.begin_scope();
+        self.consume(TK::LeftParen, "Expect '(' after 'for'.");
+
+        // Initializer
+        if self.match_(TK::Semicolon) {
+            // No initializer
+        } else if self.match_(TK::Var) {
+            self.var_declaration(true);
+        } else if self.match_(TK::Const) {
+            // This doesn't seem useful but I won't stop you
+            self.var_declaration(false);
+        } else {
+            self.expression_statement();
+        }
+
+        // Condition
+        let mut loop_start = CodeOffset(self.current_chunk().code().len());
+        let mut exit_jump = None;
+        if !self.match_(TK::Semicolon) {
+            self.expression();
+            self.consume(TK::Semicolon, "Expect ';' after loop condition.");
+
+            exit_jump = Some(self.emit_jump(OpCode::JumpIfFalse));
+            self.emit_byte(OpCode::Pop, self.line());
+        }
+
+        // Increment
+        if !self.match_(TK::RightParen) {
+            let body_jump = self.emit_jump(OpCode::Jump);
+            let increment_start = CodeOffset(self.current_chunk().code().len());
+            self.expression();
+            self.emit_byte(OpCode::Pop, self.line());
+            self.consume(TK::RightParen, "Expect ')' after for clauses.");
+
+            self.emit_loop(loop_start);
+            loop_start = increment_start;
+            self.patch_jump(body_jump)
+        }
+
+        self.statement();
+        self.emit_loop(loop_start);
+
+        if let Some(exit_jump) = exit_jump {
+            self.patch_jump(exit_jump);
+            self.emit_byte(OpCode::Pop, self.line());
+        }
+
+        self.end_scope();
     }
 }

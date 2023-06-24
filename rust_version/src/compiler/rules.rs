@@ -10,7 +10,7 @@ use super::Compiler;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, TryFromPrimitive, IntoPrimitive)]
 #[repr(u8)]
-pub enum Precedence {
+pub(super) enum Precedence {
     None,
     Assignment, // =
     Or,         // or
@@ -26,7 +26,7 @@ pub enum Precedence {
 
 type ParseFn<'a> = fn(&mut Compiler<'a>, bool) -> ();
 
-pub struct Rule<'a> {
+pub(super) struct Rule<'a> {
     prefix: Option<ParseFn<'a>>,
     infix: Option<ParseFn<'a>>,
     precedence: Precedence,
@@ -94,7 +94,7 @@ pub(super) fn make_rules<'a>() -> Rules<'a> {
         Identifier   = [variable, None,   None      ],
         String       = [string,   None,   None      ],
         Number       = [number,   None,   None      ],
-        And          = [None,     None,   None      ],
+        And          = [None,     and,    And       ],
         Class        = [None,     None,   None      ],
         Else         = [None,     None,   None      ],
         False        = [literal,  None,   None      ],
@@ -102,7 +102,7 @@ pub(super) fn make_rules<'a>() -> Rules<'a> {
         Fun          = [None,     None,   None      ],
         If           = [None,     None,   None      ],
         Nil          = [literal,  None,   None      ],
-        Or           = [None,     None,   None      ],
+        Or           = [None,     or,     Or        ],
         Print        = [None,     None,   None      ],
         Return       = [None,     None,   None      ],
         Super        = [None,     None,   None      ],
@@ -222,5 +222,26 @@ impl<'a> Compiler<'a> {
             self.previous.as_ref().unwrap().as_str().to_string(),
             can_assign,
         );
+    }
+
+    // #[trace]
+    fn and(&mut self, _can_assign: bool) {
+        let end_jump = self.emit_jump(OpCode::JumpIfFalse);
+        self.emit_byte(OpCode::Pop, self.line());
+        self.parse_precedence(Precedence::And);
+        self.patch_jump(end_jump);
+    }
+
+    // #[trace]
+    fn or(&mut self, _can_assign: bool) {
+        let else_jump = self.emit_jump(OpCode::JumpIfFalse);
+        let end_jump = self.emit_jump(OpCode::Jump);
+
+        self.patch_jump(else_jump);
+
+        self.emit_byte(OpCode::Pop, self.line());
+
+        self.parse_precedence(Precedence::Or);
+        self.patch_jump(end_jump);
     }
 }
