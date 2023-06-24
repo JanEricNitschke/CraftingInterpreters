@@ -67,7 +67,9 @@ impl OpCode {
             | GetGlobalLong
             | SetGlobalLong
             | DefineGlobalLong
-            | DefineGlobalConstLong | GetLocalLong | SetLocalLong => 4,
+            | DefineGlobalConstLong
+            | GetLocalLong
+            | SetLocalLong => 4,
             Negate | Add | Subtract | Multiply | Divide | Return | Nil | True | False | Not
             | Equal | Greater | Less | Print | Pop => 1,
         }
@@ -289,34 +291,25 @@ impl<'a> std::fmt::Debug for InstructionDisassembler<'a> {
             f,
             offset,
             opcode,
-            constant(Constant),
-            constant_long(ConstantLong),
+            constant(
+                Constant,
+                DefineGlobal,
+                DefineGlobalConst,
+                GetGlobal,
+                SetGlobal
+            ),
+            constant_long(
+                ConstantLong,
+                DefineGlobalLong,
+                DefineGlobalConstLong,
+                GetGlobalLong,
+                SetGlobalLong
+            ),
             byte(GetLocal, SetLocal),
             byte_long(GetLocalLong, SetLocalLong),
             simple(
-                Nil,
-                True,
-                False,
-                Return,
-                Negate,
-                DefineGlobal,
-                GetGlobal,
-                SetGlobal,
-                DefineGlobalLong,
-                DefineGlobalConst,
-                DefineGlobalConstLong,
-                GetGlobalLong,
-                SetGlobalLong,
-                Pop,
-                Equal,
-                Greater,
-                Less,
-                Add,
-                Subtract,
-                Multiply,
-                Divide,
-                Not,
-                Print,
+                Nil, True, False, Return, Negate, Pop, Equal, Greater, Less, Add, Subtract,
+                Multiply, Divide, Not, Print,
             ),
         )?;
         Ok(())
