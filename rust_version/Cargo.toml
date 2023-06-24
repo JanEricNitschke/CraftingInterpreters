@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 num_enum = "0.5.7"
+paste = "1.0.9"
 shrinkwraprs = "0.3.0"
 trace = "0.1.7"
 

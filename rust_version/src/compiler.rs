@@ -1,3 +1,5 @@
+use std::{char::MAX, collections::HashMap};
+
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use trace::trace;
 trace::init_depth_var!();
@@ -115,6 +117,11 @@ fn make_rules<'a>() -> Rules<'a> {
     )
 }
 
+struct Local<'a> {
+    name: Token<'a>,
+    depth: i32,
+}
+
 pub struct Compiler<'a> {
     scanner: Scanner<'a>,
     previous: Option<Token<'a>>,
@@ -122,7 +129,10 @@ pub struct Compiler<'a> {
     had_error: bool,
     panic_mode: bool,
     chunk: Chunk,
+    globals_by_name: HashMap<String, ConstantLongIndex>,
     rules: Rules<'a>,
+    locals: Vec<Local<'a>>,
+    scope_depth: i32,
 }
 
 impl<'a> Compiler<'a> {
@@ -130,12 +140,15 @@ impl<'a> Compiler<'a> {
     fn new(source: &'a [u8]) -> Self {
         Self {
             chunk: Chunk::new("<main>"),
+            globals_by_name: HashMap::new(),
             scanner: Scanner::new(source),
             previous: None,
             current: None,
             had_error: false,
             panic_mode: false,
             rules: make_rules(),
+            locals: Vec::new(),
+            scope_depth: 0,
         }
     }
 
@@ -224,6 +237,10 @@ impl<'a> Compiler<'a> {
     fn statement(&mut self) {
         if self.match_(TK::Print) {
             self.print_statement();
+        } else if self.match_(TK::LeftBrace) {
+            self.begin_scope();
+            self.block();
+            self.end_scope();
         } else {
             self.expression_statement();
         }
@@ -243,6 +260,33 @@ impl<'a> Compiler<'a> {
         self.expression();
         self.consume(TK::Semicolon, "Expect ';' after expression.");
         self.emit_byte(OpCode::Pop, line);
+    }
+
+    // #[trace]
+    fn block(&mut self) {
+        while !self.check(TK::RightBrace) && !self.check(TK::Eof) {
+            self.declaration();
+        }
+
+        self.consume(TK::RightBrace, "Expect '}' after block.")
+    }
+
+    fn begin_scope(&mut self) {
+        self.scope_depth += 1;
+    }
+
+    fn end_scope(&mut self) {
+        self.scope_depth -= 1;
+        let line = self.line();
+        while self
+            .locals
+            .last()
+            .map(|local| local.depth > self.scope_depth)
+            .unwrap_or(false)
+        {
+            self.emit_byte(OpCode::Pop, line);
+            self.locals.pop();
+        }
     }
 
     fn advance(&mut self) {
@@ -307,7 +351,6 @@ impl<'a> Compiler<'a> {
             if can_assign && self.match_(TK::Equal) {
                 self.error("Invalid assignment target.")
             }
-
         } else {
             self.error("Expect expression.");
         }
@@ -317,19 +360,105 @@ impl<'a> Compiler<'a> {
     where
         S: ToString,
     {
-        self.current_chunk().make_constant(name.to_string().into())
+        let name = name.to_string();
+        if let Some(index) = self.globals_by_name.get(&name) {
+            index.clone()
+        } else {
+            let index = self.current_chunk().make_constant(name.to_string().into());
+            self.globals_by_name.insert(name, index.clone());
+            index
+        }
     }
 
-    fn parse_variable(&mut self, msg: &str) -> ConstantLongIndex {
+    fn declare_variable(&mut self) {
+        if self.scope_depth == 0 {
+            return;
+        }
+
+        let name = self.previous.clone().unwrap();
+        if self.locals.iter().rev().any(|local| {
+            if local.depth != -1 && local.depth < self.scope_depth {
+                false
+            } else {
+                local.name.lexeme == name.lexeme
+            }
+        }) {
+            self.error("Already a variable with this name in this scope.");
+        }
+
+        self.add_local(name);
+    }
+
+    fn parse_variable(&mut self, msg: &str) -> Option<ConstantLongIndex> {
         self.consume(TK::Identifier, msg);
-        self.identifier_constant(self.previous.as_ref().unwrap().as_str().to_string())
+
+        self.declare_variable();
+        if self.scope_depth > 0 {
+            None
+        } else {
+            Some(self.identifier_constant(self.previous.as_ref().unwrap().as_str().to_string()))
+        }
     }
 
-    fn define_variable(&mut self, global: ConstantLongIndex) {
+    fn resolve_local<S>(&mut self, name: S) -> Option<usize>
+    where
+        S: ToString,
+    {
+        let name_string = name.to_string();
+        let name = name_string.as_bytes();
+        let retval = self
+            .locals
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, local)| local.name.lexeme == name)
+            .map(|(index, local)| {
+                if local.depth == -1 {
+                    self.locals.len()
+                } else {
+                    index
+                }
+            });
+        if retval == Some(self.locals.len()) {
+            self.error("Can't read local variable in its own initializer.");
+        }
+        retval
+    }
+
+    fn add_local(&mut self, name: Token<'a>) {
+        if self.locals.len() > usize::from(u8::MAX) + 1 {
+            self.error("Too many local variables in function.");
+            return;
+        }
+
+        self.locals.push(Local {
+            name,
+            depth: -1,
+        });
+    }
+
+    fn define_variable(&mut self, global: Option<ConstantLongIndex>) {
+        if global.is_none() {
+            assert!(self.scope_depth > 0);
+            self.mark_initialized();
+            return;
+        }
+
+        let global = global.unwrap();
+
         if let Ok(short) = u8::try_from(*global) {
             self.emit_bytes(OpCode::DefineGlobal, short, self.line())
         } else {
-            self.error("Too many globals!")
+            self.emit_byte(OpCode::DefineGlobalLong, self.line());
+            if !self.emit_24bit_number(*global) {
+                self.error("Too many globals in OP_DEFINE_GLOBAL_LONG!");
+            }
+        }
+    }
+
+    fn mark_initialized(&mut self) {
+        if let Some(local) = self.locals.last_mut() {
+            local.depth = self.scope_depth;
         }
     }
 
@@ -345,6 +474,11 @@ impl<'a> Compiler<'a> {
         T: Into<u8>,
     {
         self.current_chunk().write(byte, line)
+    }
+
+    fn emit_24bit_number(&mut self, number: usize) -> bool {
+        let line = self.line();
+        self.current_chunk().write_24bit_number(number, line)
     }
 
     fn emit_bytes<T1, T2>(&mut self, byte1: T1, byte2: T2, line: Line)
@@ -397,21 +531,52 @@ impl<'a> Compiler<'a> {
 
     fn named_variable<S>(&mut self, name: S, can_assign: bool)
     where
-        S: ToString {
-            let arg = self.identifier_constant(name);
-            let arg = u8::try_from(*arg).unwrap();
-            if can_assign && self.match_(TK::Equal) {
-                self.expression();
-                self.emit_bytes(OpCode::SetGlobal, arg, self.line());
+        S: ToString,
+    {
+        let line = self.line();
+        let local_index = self.resolve_local(name.to_string());
+        let global_index = if local_index.is_some() {
+            None
+        } else {
+            Some(*self.identifier_constant(name))
+        };
+
+        let op = if can_assign && self.match_(TK::Equal) {
+            self.expression();
+            if let Some(global_index) = global_index {
+                if global_index > u8::MAX.into() {
+                    OpCode::SetGlobalLong
+                } else {
+                    OpCode::SetGlobal
+                }
             } else {
-            self.emit_bytes(OpCode::GetGlobal, arg, self.line())
+                OpCode::SetLocal
+            }
+        } else if let Some(global_index) = global_index {
+            if global_index > u8::MAX.into() {
+                OpCode::GetGlobalLong
+            } else {
+                OpCode::GetGlobal
+            }
+        } else {
+            OpCode::GetLocal
+        };
+        self.emit_byte(op.clone(), line);
+
+        let arg = local_index.map(usize::from).or(global_index).unwrap();
+        if let Ok(short_arg) = u8::try_from(arg) {
+            self.emit_byte(short_arg, line);
+        } else if !self.emit_24bit_number(arg) {
+            self.error(&format!("Too many globals in {:?}", op));
         }
     }
 
-
     // #[trace]
     fn variable(&mut self, can_assign: bool) {
-        self.named_variable(self.previous.as_ref().unwrap().as_str().to_string(), can_assign);
+        self.named_variable(
+            self.previous.as_ref().unwrap().as_str().to_string(),
+            can_assign,
+        );
     }
 
     // #[trace]
@@ -452,7 +617,7 @@ impl<'a> Compiler<'a> {
             TK::Less => self.emit_byte(OpCode::Less, line),
             TK::LessEqual => self.emit_bytes(OpCode::Greater, OpCode::Not, line),
             TK::Plus => self.emit_byte(OpCode::Add, line),
-            TK::Minus => self.emit_byte(OpCode::Substract, line),
+            TK::Minus => self.emit_byte(OpCode::Subtract, line),
             TK::Star => self.emit_byte(OpCode::Multiply, line),
             TK::Slash => self.emit_byte(OpCode::Divide, line),
             _ => unreachable!("Unkown binary operator: {}", operator),

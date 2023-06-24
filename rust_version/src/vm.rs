@@ -143,7 +143,7 @@ impl VM {
                         }
                     }
                 }
-                OpCode::Substract => binary_op!(self, -),
+                OpCode::Subtract => binary_op!(self, -),
                 OpCode::Multiply => binary_op!(self, *),
                 OpCode::Divide => binary_op!(self, /),
                 OpCode::Greater => binary_op!(self, >),
@@ -157,58 +157,68 @@ impl VM {
                 OpCode::Pop => {
                     self.stack.pop().expect("Stack underflow in OP_POP.");
                 }
-                OpCode::DefineGlobal => match self.read_constant(false).clone() {
-                    Value::String(name) => {
-                        self.globals.insert(
-                            *name,
-                            self.stack
-                                .last()
-                                .expect("Stack underflow in OP_DEFINE_GLOBAL")
-                                .clone(),
-                        );
-                        self.stack.pop();
-                    }
-                    x => panic!(
-                        "Internal error: non-string operand to OP_DEFINE_GLOBAL: {:?}",
-                        x
-                    ),
-                },
-                OpCode::GetGlobal => match self.read_constant(false).clone() {
-                    Value::String(name) => match self.globals.get(&*name) {
-                        Some(value) => self.stack.push(value.clone()),
-                        None => {
-                            runtime_error!(self, "Undefined variable '{}'.", name);
-                            return InterpretResult::RuntimeError;
-                        }
-                    },
-                    x => panic!(
-                        "Internal error: non-string operand to OP_GET_GLOBAL: {:?}",
-                        x
-                    ),
-                },
-                OpCode::SetGlobal => match self.read_constant(false).clone() {
-                    Value::String(name) => {
-                        if self
-                            .globals
-                            .insert(
-                                *name.clone(),
+                op @ (OpCode::DefineGlobal | OpCode::DefineGlobalLong) => {
+                    match self.read_constant(op == OpCode::DefineGlobalLong).clone() {
+                        Value::String(name) => {
+                            self.globals.insert(
+                                *name,
                                 self.stack
                                     .last()
-                                    .expect("stack underflow in OP_SET_GLOBAL")
+                                    .unwrap_or_else(|| panic!("stack underflow in {:?}", op))
                                     .clone(),
-                            )
-                            .is_none()
-                        {
-                            self.globals.remove(name.as_ref());
-                            runtime_error!(self, "Undefined variable '{}'.", name);
-                            return InterpretResult::RuntimeError;
+                            );
+                            self.stack.pop();
                         }
+                        x => panic!("Internal error: non-string operand to {:?}: {:?}", op, x),
                     }
-                    x => panic!(
-                        "Internal error: non-string operand to OP_SET_GLOBAL: {:?}",
-                        x
-                    ),
-                },
+                }
+                op @ (OpCode::GetGlobal | OpCode::GetGlobalLong) => {
+                    match self.read_constant(op == OpCode::GetGlobalLong).clone() {
+                        Value::String(name) => match self.globals.get(&*name) {
+                            Some(value) => self.stack.push(value.clone()),
+                            None => {
+                                runtime_error!(self, "Undefined variable '{}'.", name);
+                                return InterpretResult::RuntimeError;
+                            }
+                        },
+                        x => panic!("Internal error: non-string operand to {:?}: {:?}", op, x),
+                    }
+                }
+                op @ (OpCode::SetGlobal | OpCode::SetGlobalLong) => {
+                    match self.read_constant(op == OpCode::SetGlobalLong).clone() {
+                        Value::String(name) => {
+                            if self
+                                .globals
+                                .insert(
+                                    *name.clone(),
+                                    self.stack
+                                        .last()
+                                        .unwrap_or_else(|| panic!("stack underflow in {:?}", op))
+                                        .clone(),
+                                )
+                                .is_none()
+                            {
+                                self.globals.remove(name.as_ref());
+                                runtime_error!(self, "Undefined variable '{}'.", name);
+                                return InterpretResult::RuntimeError;
+                            }
+                        }
+                        x => panic!("Internal error: non-string operand to {:?}: {:?}", op, x),
+                    }
+                }
+                OpCode::GetLocal => {
+                    let slot = self.read_byte("Internal error: missing operand for OP_GET_LOCAL");
+                    let value = self.stack[usize::from(slot)].clone();
+                    self.stack.push(value);
+                }
+                OpCode::SetLocal => {
+                    let slot = self.read_byte("Internal error: missing operand for OP_SET_LOCAL");
+                    self.stack[usize::from(slot)] = self
+                        .stack
+                        .last()
+                        .expect("stack underflow in OP_SET_LOCAL")
+                        .clone();
+                }
                 #[allow(unreachable_patterns)]
                 _ => {}
             };
