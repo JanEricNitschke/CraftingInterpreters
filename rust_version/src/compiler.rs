@@ -66,7 +66,7 @@ macro_rules! make_rules {
     }};
 }
 
-type Rules<'a> = [Rule<'a>; 42];
+type Rules<'a> = [Rule<'a>; 43];
 
 // Can't be static because the associated function types include lifetimes
 #[rustfmt::skip]
@@ -79,6 +79,7 @@ fn make_rules<'a>() -> Rules<'a> {
         LeftBrace    = [None,     None,   None      ],
         RightBrace   = [None,     None,   None      ],
         Comma        = [None,     None,   None      ],
+        Const        = [None,     None,   None      ],
         Dot          = [None,     None,   None      ],
         Minus        = [unary,    binary, Term      ],
         Plus         = [None,     binary, Term      ],
@@ -120,6 +121,7 @@ fn make_rules<'a>() -> Rules<'a> {
 struct Local<'a> {
     name: Token<'a>,
     depth: i32,
+    mutable: bool,
 }
 
 pub struct Compiler<'a> {
@@ -200,7 +202,9 @@ impl<'a> Compiler<'a> {
     // #[trace]
     fn declaration(&mut self) {
         if self.match_(TK::Var) {
-            self.var_declaration();
+            self.var_declaration(true);
+        } else if self.match_(TK::Const) {
+            self.var_declaration(false)
         } else {
             self.statement();
         }
@@ -219,6 +223,7 @@ impl<'a> Compiler<'a> {
             if let Some(
                 TK::Class
                 | TK::Fun
+                | TK::Const
                 | TK::Var
                 | TK::For
                 | TK::If
@@ -315,8 +320,8 @@ impl<'a> Compiler<'a> {
     }
 
     // #[trace]
-    fn var_declaration(&mut self) {
-        let global = self.parse_variable("Expect variable name.");
+    fn var_declaration(&mut self, mutable: bool) {
+        let global = self.parse_variable("Expect variable name.", mutable);
 
         if self.match_(TK::Equal) {
             self.expression();
@@ -326,7 +331,7 @@ impl<'a> Compiler<'a> {
 
         self.consume(TK::Semicolon, "Expect ';' after variable declaration.");
 
-        self.define_variable(global);
+        self.define_variable(global, mutable);
     }
 
     // #[trace]
@@ -370,7 +375,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn declare_variable(&mut self) {
+    fn declare_variable(&mut self, mutable: bool) {
         if self.scope_depth == 0 {
             return;
         }
@@ -386,13 +391,13 @@ impl<'a> Compiler<'a> {
             self.error("Already a variable with this name in this scope.");
         }
 
-        self.add_local(name);
+        self.add_local(name, mutable);
     }
 
-    fn parse_variable(&mut self, msg: &str) -> Option<ConstantLongIndex> {
+    fn parse_variable(&mut self, msg: &str, mutable: bool) -> Option<ConstantLongIndex> {
         self.consume(TK::Identifier, msg);
 
-        self.declare_variable();
+        self.declare_variable(mutable);
         if self.scope_depth > 0 {
             None
         } else {
@@ -425,7 +430,7 @@ impl<'a> Compiler<'a> {
         retval
     }
 
-    fn add_local(&mut self, name: Token<'a>) {
+    fn add_local(&mut self, name: Token<'a>, mutable: bool) {
         if self.locals.len() > usize::from(u8::MAX) + 1 {
             self.error("Too many local variables in function.");
             return;
@@ -434,10 +439,11 @@ impl<'a> Compiler<'a> {
         self.locals.push(Local {
             name,
             depth: -1,
+            mutable,
         });
     }
 
-    fn define_variable(&mut self, global: Option<ConstantLongIndex>) {
+    fn define_variable(&mut self, global: Option<ConstantLongIndex>, mutable: bool) {
         if global.is_none() {
             assert!(self.scope_depth > 0);
             self.mark_initialized();
@@ -447,11 +453,20 @@ impl<'a> Compiler<'a> {
         let global = global.unwrap();
 
         if let Ok(short) = u8::try_from(*global) {
-            self.emit_bytes(OpCode::DefineGlobal, short, self.line())
+            if mutable {
+                self.emit_byte(OpCode::DefineGlobal, self.line());
+            } else {
+                self.emit_byte(OpCode::DefineGlobalConst, self.line());
+            }
+            self.emit_byte(short, self.line());
         } else {
-            self.emit_byte(OpCode::DefineGlobalLong, self.line());
+            if mutable {
+                self.emit_byte(OpCode::DefineGlobalLong, self.line());
+            } else {
+                self.emit_byte(OpCode::DefineGlobalConstLong, self.line());
+            }
             if !self.emit_24bit_number(*global) {
-                self.error("Too many globals in OP_DEFINE_GLOBAL_LONG!");
+                self.error("Too many globals in define_global!");
             }
         }
     }
@@ -550,6 +565,10 @@ impl<'a> Compiler<'a> {
                     OpCode::SetGlobal
                 }
             } else {
+                let local = &self.locals[local_index.unwrap()];
+                if local.depth != -1 && !local.mutable {
+                    self.error("Reassignment to local 'const'.");
+                }
                 OpCode::SetLocal
             }
         } else if let Some(global_index) = global_index {
