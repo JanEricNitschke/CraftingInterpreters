@@ -24,10 +24,11 @@ struct Local<'a> {
     mutable: bool,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 struct LoopState {
     depth: ScopeDepth,
     start: CodeOffset,
+    break_jumps: Vec<CodeOffset>,
 }
 
 pub struct Compiler<'a> {

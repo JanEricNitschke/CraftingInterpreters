@@ -44,6 +44,7 @@ pub enum TokenKind {
     Case,
     Class,
     Continue,
+    Break,
     Default,
     Else,
     False,
@@ -250,6 +251,7 @@ impl<'a> Scanner<'a> {
     fn identifier_type(&mut self) -> TokenKind {
         match self.source[self.start] {
             b'a' => self.check_keyword(1, "nd", TokenKind::And),
+            b'b' => self.check_keyword(1, "reak", TokenKind::Break),
             b'c' => match self.source.get(self.start + 1) {
                 Some(b'a') => self.check_keyword(2, "se", TokenKind::Case),
                 Some(b'l') => self.check_keyword(2, "ass", TokenKind::Class),

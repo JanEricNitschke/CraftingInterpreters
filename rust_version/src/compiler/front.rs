@@ -1,9 +1,4 @@
-use std::process::exit;
-
 use super::{rules::Precedence, Compiler, LoopState};
-
-use trace::trace;
-trace::init_depth_var!();
 
 use crate::{
     chunk::{CodeOffset, OpCode},
@@ -65,12 +60,10 @@ impl<'a> Compiler<'a> {
             .unwrap_or(false)
     }
 
-    // #[trace]
     pub(super) fn expression(&mut self) {
         self.parse_precedence(Precedence::Assignment);
     }
 
-    // #[trace]
     fn block(&mut self) {
         while !self.check(TK::RightBrace) && !self.check(TK::Eof) {
             self.declaration();
@@ -79,7 +72,6 @@ impl<'a> Compiler<'a> {
         self.consume(TK::RightBrace, "Expect '}' after block.")
     }
 
-    // #[trace]
     fn var_declaration(&mut self, mutable: bool) {
         let global = self.parse_variable("Expect variable name.", mutable);
 
@@ -94,7 +86,6 @@ impl<'a> Compiler<'a> {
         self.define_variable(global, mutable);
     }
 
-    // #[trace]
     fn expression_statement(&mut self) {
         let line = self.line();
         self.expression();
@@ -102,15 +93,19 @@ impl<'a> Compiler<'a> {
         self.emit_byte(OpCode::Pop, line);
     }
 
-    // #[trace]
     fn continue_statement(&mut self) {
-        match self.loop_state {
+        match self.loop_state.clone() {
             None => self.error("'continue' outside a loop."),
             Some(state) => {
                 let line = self.line();
                 self.consume(TK::Semicolon, "Expect ';' after 'continue'.");
 
-                let locals_to_drop = self.locals.iter().rev().take_while(|local| local.depth > state.depth).count();
+                let locals_to_drop = self
+                    .locals
+                    .iter()
+                    .rev()
+                    .take_while(|local| local.depth > state.depth)
+                    .count();
                 for _ in 0..locals_to_drop {
                     self.emit_byte(OpCode::Pop, line);
                 }
@@ -119,7 +114,28 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    // #[trace]
+    fn break_statement(&mut self) {
+        match self.loop_state.clone() {
+            None => self.error("'break' outside a loop."),
+            Some(mut state) => {
+                let line = self.line();
+                self.consume(TK::Semicolon, "Expect ';' after 'break'.");
+
+                let locals_to_drop = self
+                    .locals
+                    .iter()
+                    .rev()
+                    .take_while(|local| local.depth > state.depth)
+                    .count();
+                for _ in 0..locals_to_drop {
+                    self.emit_byte(OpCode::Pop, line);
+                }
+                state.break_jumps.push(self.emit_jump(OpCode::Jump));
+                self.loop_state = Some(state);
+            }
+        }
+    }
+
     pub(super) fn declaration(&mut self) {
         if self.match_(TK::Var) {
             self.var_declaration(true);
@@ -133,7 +149,6 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    // #[trace]
     fn statement(&mut self) {
         if self.match_(TK::Print) {
             self.print_statement();
@@ -147,6 +162,8 @@ impl<'a> Compiler<'a> {
             self.switch_statement();
         } else if self.match_(TK::Continue) {
             self.continue_statement();
+        } else if self.match_(TK::Break) {
+            self.break_statement();
         } else if self.match_(TK::LeftBrace) {
             self.begin_scope();
             self.block();
@@ -156,7 +173,6 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    // #[trace]
     fn if_statement(&mut self) {
         let line = self.line();
         self.consume(TK::LeftParen, "Expect '(' after 'if'.");
@@ -177,7 +193,6 @@ impl<'a> Compiler<'a> {
         self.patch_jump(else_jump);
     }
 
-    // #[trace]
     fn print_statement(&mut self) {
         let line = self.line();
         self.expression();
@@ -185,7 +200,6 @@ impl<'a> Compiler<'a> {
         self.emit_byte(OpCode::Print, line);
     }
 
-    // #[trace]
     fn while_statement(&mut self) {
         let line = self.line();
         let old_loop_state = {
@@ -194,7 +208,8 @@ impl<'a> Compiler<'a> {
                 &mut self.loop_state,
                 Some(LoopState {
                     depth: self.scope_depth,
-                    start,
+                    start: start,
+                    break_jumps: Vec::new(),
                 }),
             )
         };
@@ -209,10 +224,10 @@ impl<'a> Compiler<'a> {
 
         self.patch_jump(exit_jump);
         self.emit_byte(OpCode::Pop, line);
+        self.patch_break_jumps();
         self.loop_state = old_loop_state;
     }
 
-    // #[trace]
     fn for_statement(&mut self) {
         self.begin_scope();
         self.consume(TK::LeftParen, "Expect '(' after 'for'.");
@@ -235,7 +250,8 @@ impl<'a> Compiler<'a> {
                 &mut self.loop_state,
                 Some(LoopState {
                     depth: self.scope_depth,
-                    start,
+                    start: start,
+                    break_jumps: Vec::new(),
                 }),
             )
         };
@@ -269,6 +285,8 @@ impl<'a> Compiler<'a> {
             self.patch_jump(exit_jump);
             self.emit_byte(OpCode::Pop, self.line());
         }
+
+        self.patch_break_jumps();
 
         self.loop_state = old_loop_state;
         self.end_scope();

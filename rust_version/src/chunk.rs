@@ -4,7 +4,7 @@ use shrinkwraprs::Shrinkwrap;
 
 use crate::{types::Line, value::Value};
 
-#[derive(Shrinkwrap, Clone, Copy)]
+#[derive(Shrinkwrap, Clone, Copy, Debug)]
 #[shrinkwrap(mutable)]
 pub struct CodeOffset(pub usize);
 

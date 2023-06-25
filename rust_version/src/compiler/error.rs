@@ -1,11 +1,8 @@
 use super::Compiler;
 use crate::scanner::{Token, TokenKind as TK};
 
-use trace::trace;
-trace::init_depth_var!();
 
 impl<'a> Compiler<'a> {
-
     pub(super) fn error_at_current(&mut self, msg: &str) {
         self.error_at(self.current.clone(), msg);
     }
@@ -31,8 +28,8 @@ impl<'a> Compiler<'a> {
         self.had_error = true;
     }
 
-      // #[trace]
-      pub(super) fn synchronize(&mut self) {
+
+    pub(super) fn synchronize(&mut self) {
         self.panic_mode = false;
         while !self.check(TK::Eof) {
             if self.check_previous(TK::Semicolon) {
@@ -55,5 +52,4 @@ impl<'a> Compiler<'a> {
             self.advance();
         }
     }
-
 }

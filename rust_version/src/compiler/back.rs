@@ -57,6 +57,12 @@ impl<'a> Compiler<'a> {
         self.current_chunk().patch(CodeOffset(*jump_offset+2), jump_length as u8);
     }
 
+    pub(super) fn patch_break_jumps(&mut self) {
+        while let Some(break_jump) = self.loop_state.as_mut().unwrap().break_jumps.pop() {
+            self.patch_jump(break_jump);
+        }
+    }
+
     pub(super) fn emit_loop(&mut self, loop_start: CodeOffset) {
         let offset = self.current_chunk().code().len() - *loop_start + OpCode::Loop.instruction_len();
         let line = self.line();

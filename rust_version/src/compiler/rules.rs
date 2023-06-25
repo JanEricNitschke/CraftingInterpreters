@@ -1,8 +1,5 @@
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
-use trace::trace;
-trace::init_depth_var!();
-
 use crate::chunk::OpCode;
 use crate::scanner::TokenKind as TK;
 
@@ -63,7 +60,7 @@ macro_rules! make_rules {
     }};
 }
 
-pub(super) type Rules<'a> = [Rule<'a>; 48];
+pub(super) type Rules<'a> = [Rule<'a>; 49];
 
 // Can't be static because the associated function types include lifetimes
 #[rustfmt::skip]
@@ -100,6 +97,7 @@ pub(super) fn make_rules<'a>() -> Rules<'a> {
         Class        = [None,     None,   None      ],
         Const        = [None,     None,   None      ],
         Continue     = [None,     None,   None      ],
+        Break        = [None,     None,   None      ],
         Else         = [None,     None,   None      ],
         False        = [literal,  None,   None      ],
         For          = [None,     None,   None      ],
@@ -125,7 +123,6 @@ impl<'a> Compiler<'a> {
         &self.rules[operator as usize]
     }
 
-    // #[trace]
     pub(super) fn parse_precedence(&mut self, precedence: Precedence) {
         self.advance();
         if let Some(prefix_rule) = self.get_rule(self.previous.as_ref().unwrap().kind).prefix {
@@ -152,7 +149,6 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    // #[trace]
     fn unary(&mut self, _can_assign: bool) {
         let operator = self.previous.as_ref().unwrap().kind;
         let line = self.line();
@@ -166,7 +162,6 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    // #[trace]
     fn binary(&mut self, _can_assign: bool) {
         let operator = self.previous.as_ref().unwrap().kind;
         let line = self.line();
@@ -191,7 +186,6 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    // #[trace]
     fn literal(&mut self, _can_assign: bool) {
         let literal = self.previous.as_ref().unwrap().kind;
         match literal {
@@ -202,26 +196,22 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    // #[trace]
     fn grouping(&mut self, _can_assign: bool) {
         self.expression();
         self.consume(TK::RightParen, "Expect ')' after expression.");
     }
 
-    // #[trace]
     fn number(&mut self, _can_assign: bool) {
         let value: f64 = self.previous.as_ref().unwrap().as_str().parse().unwrap();
         self.emit_constant(value);
     }
 
-    // #[trace]
     fn string(&mut self, _can_assign: bool) {
         let lexeme = self.previous.as_ref().unwrap().as_str();
         let value = lexeme[1..lexeme.len() - 1].to_string();
         self.emit_constant(value);
     }
 
-    // #[trace]
     fn variable(&mut self, can_assign: bool) {
         self.named_variable(
             self.previous.as_ref().unwrap().as_str().to_string(),
@@ -229,7 +219,6 @@ impl<'a> Compiler<'a> {
         );
     }
 
-    // #[trace]
     fn and(&mut self, _can_assign: bool) {
         let end_jump = self.emit_jump(OpCode::JumpIfFalse);
         self.emit_byte(OpCode::Pop, self.line());
@@ -237,7 +226,6 @@ impl<'a> Compiler<'a> {
         self.patch_jump(end_jump);
     }
 
-    // #[trace]
     fn or(&mut self, _can_assign: bool) {
         let else_jump = self.emit_jump(OpCode::JumpIfFalse);
         let end_jump = self.emit_jump(OpCode::Jump);
