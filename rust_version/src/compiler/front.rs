@@ -126,6 +126,8 @@ impl<'a> Compiler<'a> {
             self.if_statement();
         } else if self.match_(TK::While) {
             self.while_statement();
+        } else if self.match_(TK::Switch) {
+            self.switch_statement();
         } else if self.match_(TK::LeftBrace) {
             self.begin_scope();
             self.block();
@@ -231,5 +233,63 @@ impl<'a> Compiler<'a> {
         }
 
         self.end_scope();
+    }
+
+    fn switch_statement(&mut self) {
+        self.consume(TK::LeftParen, "Expect '(' after 'switch'");
+        self.expression();
+        self.consume(TK::RightParen, "Expect ')' after 'switch' value.");
+        self.consume(TK::LeftBrace, "Expect '{' before 'switch' body.");
+
+        let mut end_jumps = vec![];
+        let mut had_default = false;
+
+        // Loop cases and default until the file ends or  the switch gets closed
+        while !self.check(TK::RightBrace) && !self.check(TK::Eof) {
+            if had_default {
+                self.error_at_current("No 'case' or 'default' allowed after 'default' branch.");
+            }
+
+            // Check condition and build the jump over the case if false
+            let miss_jump = if self.match_(TK::Case) {
+                 // Have to dup because equality check removes it
+                self.emit_byte(OpCode::Dup, self.line());
+                self.expression();
+                self.consume(TK::Colon, "Expect ':' after 'case' value.");
+                self.emit_byte(OpCode::Equal, self.line());
+                let jump = self.emit_jump(OpCode::JumpIfFalse);
+                self.emit_byte(OpCode::Pop, self.line()); // Get rid of true comparison
+                Some(jump)
+            } else {
+                // The default case does not need to get jumped over
+                self.consume(TK::Default, "Expect 'case' or 'default'.");
+                self.consume(TK::Colon, "Expect ':' after 'default'");
+                had_default = true;
+                None
+            };
+
+            // Read the statements belonging to the current case
+            while !self.check(TK::RightBrace) && !self.check(TK::Case) && !self.check(TK::Default) && !self.check(TK::Eof) {
+                self.statement();
+            }
+
+            // If a branch has been entered then after it is finished we jump all the
+            // way to the end of the switch
+            end_jumps.push(self.emit_jump(OpCode::Jump));
+
+            if let Some(miss_jump) = miss_jump {
+                self.patch_jump(miss_jump);
+                // Get rid of the 'false' of the comparison
+                self.emit_byte(OpCode::Pop, self.line());
+            }
+        }
+
+        for end_jump in end_jumps {
+            self.patch_jump(end_jump);
+        }
+
+        self.emit_byte(OpCode::Pop, self.line()); // Get rid of switch value
+
+        self.consume(TK::RightBrace, "Expect '}' after 'switch' body.");
     }
 }

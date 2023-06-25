@@ -162,6 +162,12 @@ impl VM {
                 OpCode::Pop => {
                     self.stack.pop().expect("Stack underflow in OP_POP.");
                 }
+                OpCode::Dup => self.stack.push(
+                    self.stack
+                        .last()
+                        .expect("Stack underflow in OP_DUP")
+                        .clone(),
+                ),
                 op @ (OpCode::DefineGlobal
                 | OpCode::DefineGlobalLong
                 | OpCode::DefineGlobalConst
@@ -248,17 +254,25 @@ impl VM {
                         .clone();
                 }
                 OpCode::JumpIfFalse => {
-                    let offset = self.read_16bit_number("Internal error: missing operand for OP_JUMP_IF_FALSE");
-                    if self.stack.last().expect("stack underflow in OP_JUMP_IF_FALSE").is_falsey() {
+                    let offset = self
+                        .read_16bit_number("Internal error: missing operand for OP_JUMP_IF_FALSE");
+                    if self
+                        .stack
+                        .last()
+                        .expect("stack underflow in OP_JUMP_IF_FALSE")
+                        .is_falsey()
+                    {
                         self.ip += offset;
                     }
                 }
                 OpCode::Jump => {
-                    let offset = self.read_16bit_number("Internal error: missing operand for OP_JUMP");
+                    let offset =
+                        self.read_16bit_number("Internal error: missing operand for OP_JUMP");
                     self.ip += offset;
                 }
                 OpCode::Loop => {
-                    let offset = self.read_16bit_number("Internal error: missing operand for OP_LOOP");
+                    let offset =
+                        self.read_16bit_number("Internal error: missing operand for OP_LOOP");
                     self.ip -= offset;
                 }
                 #[allow(unreachable_patterns)]
@@ -303,7 +317,7 @@ impl VM {
 
     fn read_constant(&mut self, long: bool) -> &Value {
         let index = if long {
-           self.read_24bit_number("read_constant/long")
+            self.read_24bit_number("read_constant/long")
         } else {
             usize::from(self.read_byte("read_constant"))
         };
