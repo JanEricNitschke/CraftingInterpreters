@@ -1,6 +1,6 @@
 use std::process::exit;
 
-use super::{rules::Precedence, Compiler};
+use super::{rules::Precedence, Compiler, LoopState};
 
 use trace::trace;
 trace::init_depth_var!();
@@ -103,6 +103,23 @@ impl<'a> Compiler<'a> {
     }
 
     // #[trace]
+    fn continue_statement(&mut self) {
+        match self.loop_state {
+            None => self.error("'continue' outside a loop."),
+            Some(state) => {
+                let line = self.line();
+                self.consume(TK::Semicolon, "Expect ';' after 'continue'.");
+
+                let locals_to_drop = self.locals.iter().rev().take_while(|local| local.depth > state.depth).count();
+                for _ in 0..locals_to_drop {
+                    self.emit_byte(OpCode::Pop, line);
+                }
+                self.emit_loop(state.start);
+            }
+        }
+    }
+
+    // #[trace]
     pub(super) fn declaration(&mut self) {
         if self.match_(TK::Var) {
             self.var_declaration(true);
@@ -128,6 +145,8 @@ impl<'a> Compiler<'a> {
             self.while_statement();
         } else if self.match_(TK::Switch) {
             self.switch_statement();
+        } else if self.match_(TK::Continue) {
+            self.continue_statement();
         } else if self.match_(TK::LeftBrace) {
             self.begin_scope();
             self.block();
@@ -169,7 +188,16 @@ impl<'a> Compiler<'a> {
     // #[trace]
     fn while_statement(&mut self) {
         let line = self.line();
-        let loop_start = CodeOffset(self.current_chunk().code().len());
+        let old_loop_state = {
+            let start = CodeOffset(self.current_chunk_len());
+            std::mem::replace(
+                &mut self.loop_state,
+                Some(LoopState {
+                    depth: self.scope_depth,
+                    start,
+                }),
+            )
+        };
         self.consume(TK::LeftParen, "Expect '(' after 'while'.");
         self.expression();
         self.consume(TK::RightParen, "Expect ')' after condition.");
@@ -177,10 +205,11 @@ impl<'a> Compiler<'a> {
         let exit_jump = self.emit_jump(OpCode::JumpIfFalse);
         self.emit_byte(OpCode::Pop, line);
         self.statement();
-        self.emit_loop(loop_start);
+        self.emit_loop(self.loop_state.as_ref().unwrap().start);
 
         self.patch_jump(exit_jump);
-        self.emit_byte(OpCode::Pop, line)
+        self.emit_byte(OpCode::Pop, line);
+        self.loop_state = old_loop_state;
     }
 
     // #[trace]
@@ -200,8 +229,17 @@ impl<'a> Compiler<'a> {
             self.expression_statement();
         }
 
-        // Condition
-        let mut loop_start = CodeOffset(self.current_chunk().code().len());
+        let old_loop_state = {
+            let start = CodeOffset(self.current_chunk_len());
+            std::mem::replace(
+                &mut self.loop_state,
+                Some(LoopState {
+                    depth: self.scope_depth,
+                    start,
+                }),
+            )
+        };
+
         let mut exit_jump = None;
         if !self.match_(TK::Semicolon) {
             self.expression();
@@ -214,24 +252,25 @@ impl<'a> Compiler<'a> {
         // Increment
         if !self.match_(TK::RightParen) {
             let body_jump = self.emit_jump(OpCode::Jump);
-            let increment_start = CodeOffset(self.current_chunk().code().len());
+            let increment_start = CodeOffset(self.current_chunk_len());
             self.expression();
             self.emit_byte(OpCode::Pop, self.line());
             self.consume(TK::RightParen, "Expect ')' after for clauses.");
 
-            self.emit_loop(loop_start);
-            loop_start = increment_start;
+            self.emit_loop(self.loop_state.as_ref().unwrap().start);
+            self.loop_state.as_mut().unwrap().start = increment_start;
             self.patch_jump(body_jump)
         }
 
         self.statement();
-        self.emit_loop(loop_start);
+        self.emit_loop(self.loop_state.as_ref().unwrap().start);
 
         if let Some(exit_jump) = exit_jump {
             self.patch_jump(exit_jump);
             self.emit_byte(OpCode::Pop, self.line());
         }
 
+        self.loop_state = old_loop_state;
         self.end_scope();
     }
 
@@ -252,7 +291,7 @@ impl<'a> Compiler<'a> {
 
             // Check condition and build the jump over the case if false
             let miss_jump = if self.match_(TK::Case) {
-                 // Have to dup because equality check removes it
+                // Have to dup because equality check removes it
                 self.emit_byte(OpCode::Dup, self.line());
                 self.expression();
                 self.consume(TK::Colon, "Expect ':' after 'case' value.");
@@ -269,7 +308,11 @@ impl<'a> Compiler<'a> {
             };
 
             // Read the statements belonging to the current case
-            while !self.check(TK::RightBrace) && !self.check(TK::Case) && !self.check(TK::Default) && !self.check(TK::Eof) {
+            while !self.check(TK::RightBrace)
+                && !self.check(TK::Case)
+                && !self.check(TK::Default)
+                && !self.check(TK::Eof)
+            {
                 self.statement();
             }
 
