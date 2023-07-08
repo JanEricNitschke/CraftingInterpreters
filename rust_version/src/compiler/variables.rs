@@ -115,7 +115,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn add_local(&mut self, name: Token<'a>, mutable: bool) {
-        if self.locals.len() > usize::from(u8::MAX) + 1 {
+        if self.locals.len() > usize::pow(2, 24) - 1 {
             self.error("Too many local variables in function.");
             return;
         }
@@ -157,7 +157,10 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn mark_initialized(&mut self) {
+    pub(super) fn mark_initialized(&mut self) {
+        if *self.scope_depth == 0 {
+            return;
+        }
         if let Some(local) = self.locals.last_mut() {
             local.depth = self.scope_depth;
         }
@@ -191,5 +194,23 @@ impl<'a> Compiler<'a> {
         }
     }
 
-
+    pub(super) fn argument_list(&mut self) -> u8 {
+        let mut arg_count = 0;
+        if !self.check(TK::RightParen) {
+            loop {
+                self.expression();
+                if arg_count == 255 {
+                    self.error("Can't have more than 255 arguments.");
+                    break;
+                } else {
+                    arg_count += 1;
+                }
+                if !self.match_(TK::Comma) {
+                    break;
+                }
+            }
+        }
+        self.consume(TK::RightParen, "Expect ')' after arguments.");
+        arg_count
+    }
 }

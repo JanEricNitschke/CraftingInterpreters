@@ -1,9 +1,10 @@
-use super::{rules::Precedence, Compiler, LoopState};
+use super::{rules::Precedence, Compiler, FunctionType, LoopState};
 
 use crate::{
     chunk::{CodeOffset, OpCode},
     scanner::TokenKind as TK,
     types::Line,
+    value::Value,
 };
 
 impl<'a> Compiler<'a> {
@@ -20,6 +21,7 @@ impl<'a> Compiler<'a> {
     }
 
     pub(super) fn consume(&mut self, kind: TK, msg: &str) {
+        // println!("{:?}", self.current);
         if self.check(kind) {
             self.advance();
             return;
@@ -70,6 +72,60 @@ impl<'a> Compiler<'a> {
         }
 
         self.consume(TK::RightBrace, "Expect '}' after block.")
+    }
+
+    fn function(&mut self, function_type: FunctionType) {
+        let line = self.line();
+
+        let function = {
+            let mut compiler = Compiler::new(
+                self.scanner.clone(),
+                self.previous.as_ref().unwrap().as_str(),
+                function_type,
+            );
+            compiler.current = self.current.clone();
+            compiler.previous = self.previous.clone();
+
+            compiler.begin_scope();
+            compiler.consume(TK::LeftParen, "Expect '(' after function name.");
+
+            if !compiler.check(TK::RightParen) {
+                loop {
+                    compiler.current_function.arity += 1;
+                    if compiler.current_function.arity > 255 {
+                        compiler.error_at_current("Can't have more than 255 parameters.");
+                    }
+                    let constant = compiler.parse_variable("Expect parameter name.", false);
+                    compiler.define_variable(constant, false);
+                    if !compiler.match_(TK::Comma) {
+                        break;
+                    }
+                }
+            }
+
+            compiler.consume(TK::RightParen, "Expect ')' after parameters.");
+            compiler.consume(TK::LeftBrace, "Expect '{' before function body.");
+            compiler.block();
+
+            compiler.end();
+
+            self.scanner = compiler.scanner;
+            self.current = compiler.current;
+            self.previous = compiler.previous;
+            self.had_error |= compiler.had_error;
+            self.panic_mode |= compiler.panic_mode;
+            compiler.current_function
+        };
+
+        self.current_chunk()
+            .write_constant(Value::from(function), line);
+    }
+
+    fn fun_declaration(&mut self) {
+        let global = self.parse_variable("Expect function name.", true);
+        self.mark_initialized();
+        self.function(FunctionType::Function);
+        self.define_variable(global, true);
     }
 
     fn var_declaration(&mut self, mutable: bool) {
@@ -137,7 +193,9 @@ impl<'a> Compiler<'a> {
     }
 
     pub(super) fn declaration(&mut self) {
-        if self.match_(TK::Var) {
+        if self.match_(TK::Fun) {
+            self.fun_declaration();
+        } else if self.match_(TK::Var) {
             self.var_declaration(true);
         } else if self.match_(TK::Const) {
             self.var_declaration(false)
@@ -156,6 +214,8 @@ impl<'a> Compiler<'a> {
             self.for_statement();
         } else if self.match_(TK::If) {
             self.if_statement();
+        } else if self.match_(TK::Return) {
+            self.return_statement();
         } else if self.match_(TK::While) {
             self.while_statement();
         } else if self.match_(TK::Switch) {
@@ -198,6 +258,19 @@ impl<'a> Compiler<'a> {
         self.expression();
         self.consume(TK::Semicolon, "Expect ';' after value.");
         self.emit_byte(OpCode::Print, line);
+    }
+
+    fn return_statement(&mut self) {
+        if self.function_type == FunctionType::Script {
+            self.error("Can't return from top-level code.");
+        }
+        if self.match_(TK::Semicolon) {
+            self.emit_return();
+        } else {
+            self.expression();
+            self.consume(TK::Semicolon, "Expect ';' after return value.");
+            self.emit_byte(OpCode::Return, self.line());
+        }
     }
 
     fn while_statement(&mut self) {

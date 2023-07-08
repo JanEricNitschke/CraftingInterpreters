@@ -86,7 +86,7 @@ impl<'a> Token<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Scanner<'a> {
     source: &'a [u8],
     start: usize,
@@ -236,12 +236,12 @@ impl<'a> Scanner<'a> {
         self.make_token(TokenKind::Number)
     }
 
+    fn is_identifier_char(c: &u8) -> bool {
+        c.is_ascii_alphanumeric() || c == &b'_'
+    }
+
     fn identifier(&mut self) -> Token<'a> {
-        while self
-            .peek()
-            .map(|c| c.is_ascii_alphanumeric() || c == &b'_')
-            .unwrap_or(false)
-        {
+        while self.peek().map(Self::is_identifier_char).unwrap_or(false) {
             self.advance();
         }
         let token_kind = self.identifier_type();
@@ -271,6 +271,7 @@ impl<'a> Scanner<'a> {
             b'n' => self.check_keyword(1, "il", TokenKind::Nil),
             b'o' => self.check_keyword(1, "r", TokenKind::Or),
             b'p' => self.check_keyword(1, "rint", TokenKind::Print),
+            b'r' => self.check_keyword(1, "eturn", TokenKind::Return),
             b's' => match self.source.get(self.start + 1) {
                 Some(b'u') => self.check_keyword(2, "per", TokenKind::Super),
                 Some(b'w') => self.check_keyword(2, "itch", TokenKind::Switch),
@@ -308,7 +309,13 @@ impl<'a> Scanner<'a> {
     fn check_keyword(&mut self, start: usize, rest: &str, kind: TokenKind) -> TokenKind {
         let from = self.source.len().min(self.start + start);
         let to = self.source.len().min(from + rest.len());
-        if &self.source[from..to] == rest.as_bytes() {
+        if &self.source[from..to] == rest.as_bytes()
+            && self
+                .source
+                .get(to)
+                .map(|c| !Self::is_identifier_char(c))
+                .unwrap_or(true)
+        {
             kind
         } else {
             TokenKind::Identifier

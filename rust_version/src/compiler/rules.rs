@@ -23,6 +23,7 @@ pub(super) enum Precedence {
 
 type ParseFn<'a> = fn(&mut Compiler<'a>, bool) -> ();
 
+#[derive(Clone)]
 pub(super) struct Rule<'a> {
     prefix: Option<ParseFn<'a>>,
     infix: Option<ParseFn<'a>>,
@@ -60,15 +61,13 @@ macro_rules! make_rules {
     }};
 }
 
-pub(super) type Rules<'a> = [Rule<'a>; 49];
+pub(super) type Rules<'a> = [Rule<'a>; 47];
 
 // Can't be static because the associated function types include lifetimes
 #[rustfmt::skip]
 pub(super) fn make_rules<'a>() -> Rules<'a> {
     make_rules!(
-        LeftParen    = [grouping, None,   None      ],
-        RightParen   = [None,     None,   None      ],
-        LeftParen    = [grouping, None,   None      ],
+        LeftParen    = [grouping, call,   Call      ],
         RightParen   = [None,     None,   None      ],
         LeftBrace    = [None,     None,   None      ],
         RightBrace   = [None,     None,   None      ],
@@ -184,6 +183,11 @@ impl<'a> Compiler<'a> {
             TK::Slash => self.emit_byte(OpCode::Divide, line),
             _ => unreachable!("Unkown binary operator: {}", operator),
         }
+    }
+
+    fn call(&mut self, _can_assign: bool) {
+        let arg_count = self.argument_list();
+        self.emit_bytes(OpCode::Call, arg_count, self.line());
     }
 
     fn literal(&mut self, _can_assign: bool) {

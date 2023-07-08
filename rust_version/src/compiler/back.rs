@@ -1,4 +1,8 @@
-use crate::{chunk::{OpCode, CodeOffset}, value::Value, types::Line,};
+use crate::{
+    chunk::{CodeOffset, OpCode},
+    types::Line,
+    value::Value,
+};
 
 use super::Compiler;
 
@@ -25,14 +29,17 @@ impl<'a> Compiler<'a> {
     }
 
     pub(super) fn emit_return(&mut self) {
-        self.emit_byte(OpCode::Return, self.line());
+        let line = self.line();
+        self.emit_byte(OpCode::Nil, line);
+        self.emit_byte(OpCode::Return, line);
     }
 
     pub(super) fn emit_constant<T>(&mut self, value: T)
     where
         T: Into<Value>,
     {
-        if !self.chunk.write_constant(value.into(), self.line()) {
+        let line = self.line();
+        if !self.current_chunk().write_constant(value.into(), line) {
             self.error("Too many constants in one chunk.");
         }
     }
@@ -40,21 +47,24 @@ impl<'a> Compiler<'a> {
     pub(super) fn emit_jump(&mut self, instruction: OpCode) -> CodeOffset {
         let line = self.line();
         self.emit_byte(instruction, line);
-        let retval = CodeOffset(self.current_chunk().code().len()-1);
-        self.emit_byte(0xff,  line);
+        let retval = CodeOffset(self.current_chunk().code().len() - 1);
+        self.emit_byte(0xff, line);
         self.emit_byte(0xff, line);
         retval
     }
 
     pub(super) fn patch_jump(&mut self, jump_offset: CodeOffset) {
-        let jump_length = self.current_chunk().code().len() - *jump_offset - OpCode::Jump.instruction_len();
+        let jump_length =
+            self.current_chunk().code().len() - *jump_offset - OpCode::Jump.instruction_len();
 
         if jump_length > usize::from(u16::MAX) {
             self.error("Too much code to jump over.");
         }
 
-        self.current_chunk().patch(CodeOffset(*jump_offset+1), (jump_length >> 8) as u8);
-        self.current_chunk().patch(CodeOffset(*jump_offset+2), jump_length as u8);
+        self.current_chunk()
+            .patch(CodeOffset(*jump_offset + 1), (jump_length >> 8) as u8);
+        self.current_chunk()
+            .patch(CodeOffset(*jump_offset + 2), jump_length as u8);
     }
 
     pub(super) fn patch_break_jumps(&mut self) {
@@ -64,7 +74,8 @@ impl<'a> Compiler<'a> {
     }
 
     pub(super) fn emit_loop(&mut self, loop_start: CodeOffset) {
-        let offset = self.current_chunk().code().len() - *loop_start + OpCode::Loop.instruction_len();
+        let offset =
+            self.current_chunk().code().len() - *loop_start + OpCode::Loop.instruction_len();
         let line = self.line();
 
         self.emit_byte(OpCode::Loop, line);
@@ -75,5 +86,4 @@ impl<'a> Compiler<'a> {
         self.emit_byte((offset >> 8) as u8, line);
         self.emit_byte(offset as u8, line);
     }
-
 }

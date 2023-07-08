@@ -1,3 +1,4 @@
+use derivative::Derivative;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use paste::paste;
 use shrinkwraprs::Shrinkwrap;
@@ -38,6 +39,7 @@ pub enum OpCode {
     Jump,
     JumpIfFalse,
     Loop,
+    Call,
 
     Nil,
     True,
@@ -68,10 +70,10 @@ impl OpCode {
         use OpCode::*;
         std::mem::size_of::<OpCode>()
             + match self {
-                Negate | Add | Subtract | Multiply | Divide | Return | Nil | True | False | Not
+                Negate | Add | Subtract | Multiply | Divide | Nil | True | False | Not
                 | Equal | Greater | Less | Print | Pop | Dup => 0,
                 Constant | GetLocal | SetLocal | GetGlobal | SetGlobal | DefineGlobal
-                | DefineGlobalConst => 1,
+                | DefineGlobalConst | Call | Return => 1,
                 Jump | JumpIfFalse | Loop => 2,
                 ConstantLong
                 | GetGlobalLong
@@ -84,9 +86,13 @@ impl OpCode {
     }
 }
 
+
+#[derive(PartialEq, Derivative, Clone)]
+#[derivative(PartialOrd)]
 pub struct Chunk {
     name: String,
-    code: Vec<u8>,
+    pub code: Vec<u8>,
+    #[derivative(PartialOrd = "ignore")]
     lines: Vec<(usize, Line)>,
     constants: Vec<Value>,
 }
@@ -338,12 +344,12 @@ impl<'a> std::fmt::Debug for InstructionDisassembler<'a> {
                 GetGlobalLong,
                 SetGlobalLong
             ),
-            byte(GetLocal, SetLocal),
+            byte(GetLocal, SetLocal, Call),
             byte_long(GetLocalLong, SetLocalLong),
             jump(Jump, JumpIfFalse, Loop),
             simple(
-                Nil, True, False, Return, Negate, Pop, Equal, Greater, Less, Add, Subtract,
-                Multiply, Divide, Not, Print, Dup,
+                Nil, True, False, Negate, Pop, Equal, Greater, Less, Add, Subtract,
+                Multiply, Divide, Not, Print, Return, Dup,
             ),
         )?;
         Ok(())
