@@ -71,6 +71,7 @@ impl VM {
         };
 
         vm.define_native("clock", 0, clock_native);
+        vm.define_native("sqrt", 1, sqrt_native);
 
         vm
     }
@@ -471,7 +472,6 @@ impl VM {
         Rc::clone(&self.frame().function)
     }
 
-
     fn call_value(&mut self, callee: Value, arg_count: u8) -> bool {
         match callee {
             Value::Function(f) => self.execute_call(f, arg_count),
@@ -486,23 +486,55 @@ impl VM {
     fn execute_native_call(&mut self, f: NativeFunction, arg_count: u8) -> bool {
         let arity = f.arity;
         if arg_count != arity {
-            runtime_error!(self, "Native function '{}' expected {} arguments, got {}.", f.name, arity, arg_count);
+            runtime_error!(
+                self,
+                "Native function '{}' expected {} argument{}, got {}.",
+                f.name,
+                arity,
+                {
+                    if arity != 1 {
+                        "s"
+                    } else {
+                        ""
+                    }
+                },
+                arg_count
+            );
             return false;
         }
         let fun = f.fun;
         let start_index = self.stack.len() - usize::from(arg_count);
-        let result = fun(&mut self.stack[start_index..]);
-        self.stack
-            .truncate(self.stack.len() - usize::from(arg_count) - 1);
-        self.stack.push(result);
-        true
+        match fun(&mut self.stack[start_index..]) {
+            Ok(value) => {
+                self.stack
+                    .truncate(self.stack.len() - usize::from(arg_count) - 1);
+                self.stack.push(value);
+                true
+            }
+            Err(e) => {
+                runtime_error!(self, "{}", e);
+                false
+            }
+        }
     }
 
     fn execute_call(&mut self, f: Rc<Function>, arg_count: u8) -> bool {
         let arity = f.arity;
         let arg_count = usize::from(arg_count);
         if arg_count != arity {
-            runtime_error!(self, "Expected {} arguments but got {}.", arity, arg_count);
+            runtime_error!(
+                self,
+                "Expected {} argument{} but got {}.",
+                arity,
+                {
+                    if arity != 1 {
+                        "s"
+                    } else {
+                        ""
+                    }
+                },
+                arg_count
+            );
             return false;
         }
 
@@ -537,11 +569,19 @@ impl VM {
     }
 }
 
-fn clock_native(_args: &mut [Value]) -> Value {
-    Value::Number(
+fn clock_native(_args: &mut [Value]) -> Result<Value, String> {
+    Ok(Value::Number(
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs_f64(),
-    )
+    ))
+}
+
+fn sqrt_native(args: &mut [Value]) -> Result<Value, String> {
+    match args {
+        [Value::Number(n)] => Ok(n.sqrt().into()),
+        [x] => Err(format!("'sqrt' expected numeric argument, got: {}", x)),
+        _ => unreachable!(),
+    }
 }
