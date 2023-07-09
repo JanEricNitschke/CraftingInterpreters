@@ -639,7 +639,7 @@ impl VM {
             .iter()
             .map(|v| (**v).clone())
             .collect::<Vec<_>>();
-        match fun(&args) {
+        match fun(&args, &mut self.arena) {
             Ok(value) => {
                 self.stack
                     .truncate(self.stack.len() - usize::from(arg_count) - 1);

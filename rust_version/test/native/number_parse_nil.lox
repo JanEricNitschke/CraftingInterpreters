@@ -1,0 +1,1 @@
+print number(nil); // expect runtime error: 'number' expected string, number or bool argument, got: nil

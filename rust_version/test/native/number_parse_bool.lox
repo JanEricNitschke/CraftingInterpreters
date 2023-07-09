@@ -1,0 +1,2 @@
+print number(true); // expect: 1
+print number(false); // expect: 0

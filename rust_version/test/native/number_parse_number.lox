@@ -1,0 +1,2 @@
+print number(5); // expect: 5
+print number(7.1); // expect: 7.1

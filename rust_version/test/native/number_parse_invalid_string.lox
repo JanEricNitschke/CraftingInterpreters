@@ -1,0 +1,1 @@
+print number("invalid"); // expect runtime error: 'number' could not convert string 'invalid' to a number.

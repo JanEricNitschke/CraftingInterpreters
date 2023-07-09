@@ -1,7 +1,7 @@
 use derivative::Derivative;
 
 use crate::{
-    arena::{FunctionId, StringId, ValueId},
+    arena::{FunctionId, StringId, ValueId, Arena},
     chunk::Chunk,
 };
 
@@ -178,7 +178,7 @@ pub struct NativeFunction {
     pub fun: NativeFunctionImpl,
 }
 
-pub type NativeFunctionImpl = fn(&[Value]) -> Result<Value, String>;
+pub type NativeFunctionImpl = fn(&[Value], arena: &mut Arena) -> Result<Value, String>;
 
 fn always_equals<T>(_: &T, _: &T) -> bool {
     true
