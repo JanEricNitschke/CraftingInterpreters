@@ -1,24 +1,42 @@
-use crate::chunk::{ConstantLongIndex, OpCode};
+use hashbrown::hash_map::Entry;
 
-use super::{Compiler, Local, ScopeDepth};
+use crate::{
+    arena::StringId,
+    chunk::{ConstantLongIndex, OpCode},
+};
+
+use super::{Compiler, Local, ScopeDepth, Upvalue};
 use crate::scanner::{Token, TokenKind as TK};
 
-impl<'a> Compiler<'a> {
+impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
     pub(super) fn begin_scope(&mut self) {
-        *self.scope_depth += 1;
+        **self.scope_depth_mut() += 1;
     }
 
     pub(super) fn end_scope(&mut self) {
-        *self.scope_depth -= 1;
+        **self.scope_depth_mut() -= 1;
+        let scope_depth = self.scope_depth();
+        let mut instructions = vec![];
         let line = self.line();
-        while self
-            .locals
-            .last()
-            .map(|local| local.depth > self.scope_depth)
-            .unwrap_or(false)
+
         {
-            self.emit_byte(OpCode::Pop, line);
-            self.locals.pop();
+            let locals = self.locals_mut();
+            while locals
+                .last()
+                .map(|local| local.depth > scope_depth)
+                .unwrap_or(false)
+            {
+                instructions.push(if locals.last().unwrap().is_captured {
+                    OpCode::CloseUpvalue
+                } else {
+                    OpCode::Pop
+                });
+                locals.pop();
+            }
+        }
+
+        for instruction in instructions {
+            self.emit_byte(instruction, line)
         }
     }
 
@@ -27,51 +45,62 @@ impl<'a> Compiler<'a> {
         S: ToString,
     {
         let line = self.line();
-        let local_index = self.resolve_local(name.to_string());
-        let global_index = if local_index.is_some() {
-            None
+        let mut get_op = OpCode::GetLocal;
+        let mut set_op = OpCode::SetLocal;
+        let mut arg = self.resolve_local(name.to_string());
+
+        // Upvalue?
+        if arg.is_none() {
+            if let Some(upvalue_arg) = self.resolve_upvalue(name.to_string()) {
+                get_op = OpCode::GetUpvalue;
+                set_op = OpCode::SetUpvalue;
+                arg = Some(usize::from(upvalue_arg));
+            }
+        }
+
+        // If neither local nor upvalue, then it must be a global
+        if arg.is_none() {
+            arg = Some(*self.identifier_constant(name));
+            get_op = OpCode::GetGlobal;
+            set_op = OpCode::SetGlobal;
+        }
+        let arg = arg.unwrap();
+
+        // Support for more than u8::MAX variables in a scope
+        let long = if arg > u8::MAX.into() {
+            get_op = get_op.to_long();
+            set_op = set_op.to_long();
+            true
         } else {
-            Some(*self.identifier_constant(name))
+            false
         };
 
+
+        // Get or set?
         let op = if can_assign && self.match_(TK::Equal) {
             self.expression();
-            if let Some(global_index) = global_index {
-                if global_index > u8::MAX.into() {
-                    OpCode::SetGlobalLong
-                } else {
-                    OpCode::SetGlobal
-                }
-            } else {
-                let local_index = local_index.unwrap();
-                let local = &self.locals[local_index];
-                if *local.depth != -1 && !local.mutable {
-                    self.error("Reassignment to local 'const'.");
-                }
-                if local_index > u8::MAX.into() {
-                    OpCode::SetLocalLong
-                } else {
-                    OpCode::SetLocal
-                }
+            if set_op == OpCode::SetLocal || set_op == OpCode::SetLocalLong {
+                self.check_local_const(arg);
             }
-        } else if let Some(global_index) = global_index {
-            if global_index > u8::MAX.into() {
-                OpCode::GetGlobalLong
-            } else {
-                OpCode::GetGlobal
-            }
-        } else if local_index.unwrap() > u8::MAX.into() {
-            OpCode::GetLocalLong
-        } else {
-            OpCode::GetLocal
-        };
+            set_op }else {
+                get_op
+            };
+
+        // Generate the code.
         self.emit_byte(op.clone(), line);
 
-        let arg = local_index.map(usize::from).or(global_index).unwrap();
-        if let Ok(short_arg) = u8::try_from(arg) {
-            self.emit_byte(short_arg, line);
-        } else if !self.emit_24bit_number(arg) {
+        if !self.emit_number(arg, long) {
             self.error(&format!("Too many globals in {:?}", op));
+        }
+    }
+
+    pub(super) fn string_id<S>(&mut self, s: S) -> StringId
+    where
+        S: ToString,
+    {
+        match self.strings_by_name.entry(s.to_string()) {
+            Entry::Vacant(entry) => *entry.insert(self.arena.add_string(s.to_string())),
+            Entry::Occupied(entry) => *entry.get(),
         }
     }
 
@@ -79,12 +108,13 @@ impl<'a> Compiler<'a> {
     where
         S: ToString,
     {
-        let name = name.to_string();
-        if let Some(index) = self.globals_by_name.get(&name) {
+        let string_id = self.string_id(name);
+        if let Some(index) = self.globals_by_name().get(&string_id) {
             *index
         } else {
-            let index = self.current_chunk().make_constant(name.to_string().into());
-            self.globals_by_name.insert(name, index);
+            let value_id = self.arena.add_value(string_id.into());
+            let index = self.current_chunk().make_constant(value_id);
+            self.globals_by_name_mut().insert(string_id, index);
             index
         }
     }
@@ -96,45 +126,101 @@ impl<'a> Compiler<'a> {
         let name_string = name.to_string();
         let name = name_string.as_bytes();
         let retval = self
-            .locals
+            .locals()
             .iter()
             .enumerate()
             .rev()
             .find(|(_, local)| local.name.lexeme == name)
             .map(|(index, local)| {
                 if *local.depth == -1 {
-                    self.locals.len()
+                    self.locals().len()
                 } else {
                     index
                 }
             });
-        if retval == Some(self.locals.len()) {
+        if retval == Some(self.locals().len()) {
             self.error("Can't read local variable in its own initializer.");
         }
         retval
     }
 
-    fn add_local(&mut self, name: Token<'a>, mutable: bool) {
-        if self.locals.len() > usize::pow(2, 24) - 1 {
+    pub(super) fn add_local(&mut self, name: Token<'scanner>, mutable: bool) {
+        if self.locals().len() > usize::pow(2, 24) - 1 {
             self.error("Too many local variables in function.");
             return;
         }
 
-        self.locals.push(Local {
+        self.locals_mut().push(Local {
             name,
             depth: ScopeDepth(-1),
             mutable,
+            is_captured: false,
         });
     }
 
+    fn resolve_upvalue<S>(&mut self, name: S) -> Option<u8>
+    where
+        S: ToString,
+    {
+        if !self.has_enclosing() {
+            return None;
+        }
+
+        if let Some(local) = self.in_enclosing(|compiler| compiler.resolve_local(name.to_string()))
+        {
+            self.in_enclosing(|compiler| compiler.locals_mut()[local].is_captured = true);
+            return Some(self.add_upvalue(local, true));
+        }
+
+        if let Some(upvalue) =
+            self.in_enclosing(|compiler| compiler.resolve_upvalue(name.to_string()))
+        {
+            return Some(self.add_upvalue(usize::from(upvalue), false));
+        }
+
+        None
+    }
+
+    fn add_upvalue(&mut self, local_index: usize, is_local: bool) -> u8 {
+        if let Ok(local_index) = u8::try_from(local_index) {
+            // Return index if we already have it
+            if let Some((upvalue_index, _)) =
+                self.upvalues().iter().enumerate().find(|(_, upvalue)| {
+                    upvalue.index == local_index && upvalue.is_local == is_local
+                })
+            {
+                return u8::try_from(upvalue_index).unwrap();
+            }
+
+            if self.upvalues().len() >= usize::from(u8::MAX)+1 {
+                self.error("Too many closure variables in function.");
+                return 0;
+            }
+
+            // Record new upvalue
+            self.upvalues_mut().push(Upvalue {
+                index: local_index,
+                is_local,
+            });
+            let upvalue_count = self.upvalues().len();
+            self.current_function_mut().upvalue_count = upvalue_count;
+            u8::try_from(upvalue_count-1).unwrap()
+        } else {
+            // This is where `(Get|Set)UpvalueLong` would go
+            self.error("Too variables in function surrounding closure.");
+            0
+        }
+    }
+
     pub(super) fn declare_variable(&mut self, mutable: bool) {
-        if *self.scope_depth == 0 {
+        if *self.scope_depth() == 0 {
             return;
         }
 
         let name = self.previous.clone().unwrap();
-        if self.locals.iter().rev().any(|local| {
-            if *local.depth != -1 && local.depth < self.scope_depth {
+        let scope_depth = self.scope_depth();
+        if self.locals_mut().iter().rev().any(|local| {
+            if *local.depth != -1 && local.depth < scope_depth {
                 false
             } else {
                 local.name.lexeme == name.lexeme
@@ -150,7 +236,7 @@ impl<'a> Compiler<'a> {
         self.consume(TK::Identifier, msg);
 
         self.declare_variable(mutable);
-        if *self.scope_depth > 0 {
+        if *self.scope_depth() > 0 {
             None
         } else {
             Some(self.identifier_constant(self.previous.as_ref().unwrap().as_str().to_string()))
@@ -158,17 +244,18 @@ impl<'a> Compiler<'a> {
     }
 
     pub(super) fn mark_initialized(&mut self) {
-        if *self.scope_depth == 0 {
+        let scope_depth = self.scope_depth();
+        if *scope_depth == 0 {
             return;
         }
-        if let Some(local) = self.locals.last_mut() {
-            local.depth = self.scope_depth;
+        if let Some(local) = self.locals_mut().last_mut() {
+            local.depth = scope_depth;
         }
     }
 
     pub(super) fn define_variable(&mut self, global: Option<ConstantLongIndex>, mutable: bool) {
         if global.is_none() {
-            assert!(*self.scope_depth > 0);
+            assert!(*self.scope_depth() > 0);
             self.mark_initialized();
             return;
         }
@@ -212,5 +299,13 @@ impl<'a> Compiler<'a> {
         }
         self.consume(TK::RightParen, "Expect ')' after arguments.");
         arg_count
+    }
+
+
+    fn check_local_const(&mut self, local_index: usize) {
+        let local = &self.locals()[local_index];
+        if *local.depth != -1 && !local.mutable {
+            self.error("Reassignment to local 'const'.");
+        }
     }
 }

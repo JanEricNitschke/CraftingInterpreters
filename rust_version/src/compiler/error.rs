@@ -2,7 +2,7 @@ use super::Compiler;
 use crate::scanner::{Token, TokenKind as TK};
 
 
-impl<'a> Compiler<'a> {
+impl<'compiler, 'arena> Compiler<'compiler, 'arena> {
     pub(super) fn error_at_current(&mut self, msg: &str) {
         self.error_at(self.current.clone(), msg);
     }

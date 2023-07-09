@@ -4,10 +4,9 @@ use crate::{
     chunk::{CodeOffset, OpCode},
     scanner::TokenKind as TK,
     types::Line,
-    value::Value,
 };
 
-impl<'a> Compiler<'a> {
+impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
     pub(super) fn advance(&mut self) {
         self.previous = std::mem::take(&mut self.current);
         loop {
@@ -76,23 +75,17 @@ impl<'a> Compiler<'a> {
 
     fn function(&mut self, function_type: FunctionType) {
         let line = self.line();
+        let function_name = self.previous.as_ref().unwrap().as_str().to_string();
 
-        let function = {
-            let mut compiler = Compiler::new(
-                self.scanner.clone(),
-                self.previous.as_ref().unwrap().as_str(),
-                function_type,
-            );
-            compiler.current = self.current.clone();
-            compiler.previous = self.previous.clone();
-
+        let nested_state = self.nested(function_name, function_type, |compiler| {
             compiler.begin_scope();
+
             compiler.consume(TK::LeftParen, "Expect '(' after function name.");
 
             if !compiler.check(TK::RightParen) {
                 loop {
-                    compiler.current_function.arity += 1;
-                    if compiler.current_function.arity > 255 {
+                    compiler.current_function_mut().arity += 1;
+                    if compiler.current_function().arity > 255 {
                         compiler.error_at_current("Can't have more than 255 parameters.");
                     }
                     let constant = compiler.parse_variable("Expect parameter name.", false);
@@ -106,19 +99,20 @@ impl<'a> Compiler<'a> {
             compiler.consume(TK::RightParen, "Expect ')' after parameters.");
             compiler.consume(TK::LeftBrace, "Expect '{' before function body.");
             compiler.block();
-
             compiler.end();
+        });
+        let nested_function = nested_state.current_function;
+        let nested_upvalues = nested_state.upvalues;
 
-            self.scanner = compiler.scanner;
-            self.current = compiler.current;
-            self.previous = compiler.previous;
-            self.had_error |= compiler.had_error;
-            self.panic_mode |= compiler.panic_mode;
-            compiler.current_function
-        };
+        self.emit_byte(OpCode::Closure, line);
+        let function_id = self.arena.add_function(nested_function);
+        let value_id = self.arena.add_value(function_id.into());
+        let value_id_byte = u8::try_from(self.current_chunk().make_constant(value_id).0).unwrap();
+        self.emit_byte(value_id_byte, line);
 
-        self.current_chunk()
-            .write_constant(Value::from(function), line);
+        for upvalue in nested_upvalues {
+            self.emit_bytes(upvalue.is_local, upvalue.index, line);
+        }
     }
 
     fn fun_declaration(&mut self) {
@@ -150,14 +144,14 @@ impl<'a> Compiler<'a> {
     }
 
     fn continue_statement(&mut self) {
-        match self.loop_state.clone() {
+        match self.loop_state().clone() {
             None => self.error("'continue' outside a loop."),
             Some(state) => {
                 let line = self.line();
                 self.consume(TK::Semicolon, "Expect ';' after 'continue'.");
 
                 let locals_to_drop = self
-                    .locals
+                    .locals()
                     .iter()
                     .rev()
                     .take_while(|local| local.depth > state.depth)
@@ -171,14 +165,14 @@ impl<'a> Compiler<'a> {
     }
 
     fn break_statement(&mut self) {
-        match self.loop_state.clone() {
+        match self.loop_state().clone() {
             None => self.error("'break' outside a loop."),
             Some(mut state) => {
                 let line = self.line();
                 self.consume(TK::Semicolon, "Expect ';' after 'break'.");
 
                 let locals_to_drop = self
-                    .locals
+                    .locals()
                     .iter()
                     .rev()
                     .take_while(|local| local.depth > state.depth)
@@ -187,7 +181,7 @@ impl<'a> Compiler<'a> {
                     self.emit_byte(OpCode::Pop, line);
                 }
                 state.break_jumps.push(self.emit_jump(OpCode::Jump));
-                self.loop_state = Some(state);
+                *self.loop_state_mut() = Some(state);
             }
         }
     }
@@ -261,7 +255,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn return_statement(&mut self) {
-        if self.function_type == FunctionType::Script {
+        if self.function_type() == FunctionType::Script {
             self.error("Can't return from top-level code.");
         }
         if self.match_(TK::Semicolon) {
@@ -277,14 +271,8 @@ impl<'a> Compiler<'a> {
         let line = self.line();
         let old_loop_state = {
             let start = CodeOffset(self.current_chunk_len());
-            std::mem::replace(
-                &mut self.loop_state,
-                Some(LoopState {
-                    depth: self.scope_depth,
-                    start: start,
-                    break_jumps: Vec::new(),
-                }),
-            )
+            let depth = self.scope_depth();
+            std::mem::replace(self.loop_state_mut(), Some(LoopState{depth, start, break_jumps: Vec::new()}))
         };
         self.consume(TK::LeftParen, "Expect '(' after 'while'.");
         self.expression();
@@ -293,49 +281,56 @@ impl<'a> Compiler<'a> {
         let exit_jump = self.emit_jump(OpCode::JumpIfFalse);
         self.emit_byte(OpCode::Pop, line);
         self.statement();
-        self.emit_loop(self.loop_state.as_ref().unwrap().start);
+        let loop_start = self.loop_state().as_ref().unwrap().start;
+        self.emit_loop(loop_start);
 
         self.patch_jump(exit_jump);
         self.emit_byte(OpCode::Pop, line);
         self.patch_break_jumps();
-        self.loop_state = old_loop_state;
+        *self.loop_state_mut() = old_loop_state;
     }
 
     fn for_statement(&mut self) {
         self.begin_scope();
         self.consume(TK::LeftParen, "Expect '(' after 'for'.");
+        let line = self.line();
 
-        // Initializer
-        if self.match_(TK::Semicolon) {
+        // Compile initializer, store loop variable
+        let loop_var_name_const =       if self.match_(TK::Semicolon) {
             // No initializer
-        } else if self.match_(TK::Var) {
-            self.var_declaration(true);
-        } else if self.match_(TK::Const) {
-            // This doesn't seem useful but I won't stop you
-            self.var_declaration(false);
+            None
+        } else if self.match_(TK::Var) || self.match_(TK::Const) {
+            let name = self.current.clone().unwrap();
+            let is_const = self.check_previous(TK::Var);
+            self.var_declaration(is_const);
+            // Challenge 25/2: alias loop variables
+            if let Ok(loop_var) = u8::try_from(self.locals().len() -1) {
+                Some((loop_var, name, is_const))
+            } else {
+                self.error("Creating loop variable led to too many locals.");
+                None
+            }
         } else {
             self.expression_statement();
-        }
-
-        let old_loop_state = {
-            let start = CodeOffset(self.current_chunk_len());
-            std::mem::replace(
-                &mut self.loop_state,
-                Some(LoopState {
-                    depth: self.scope_depth,
-                    start: start,
-                    break_jumps: Vec::new(),
-                }),
-            )
+            None
         };
 
+        // Store old loop state to restore at then end
+        let old_loop_state = {
+            let start = CodeOffset(self.current_chunk_len());
+            let depth = self.scope_depth();
+            std::mem::replace(self.loop_state_mut(), Some(LoopState{depth, start, break_jumps: Vec::new()}))
+        };
+
+
+        // Compile increment clause
         let mut exit_jump = None;
         if !self.match_(TK::Semicolon) {
             self.expression();
             self.consume(TK::Semicolon, "Expect ';' after loop condition.");
 
             exit_jump = Some(self.emit_jump(OpCode::JumpIfFalse));
-            self.emit_byte(OpCode::Pop, self.line());
+            self.emit_byte(OpCode::Pop, line);
         }
 
         // Increment
@@ -343,16 +338,44 @@ impl<'a> Compiler<'a> {
             let body_jump = self.emit_jump(OpCode::Jump);
             let increment_start = CodeOffset(self.current_chunk_len());
             self.expression();
-            self.emit_byte(OpCode::Pop, self.line());
+            self.emit_byte(OpCode::Pop, line);
             self.consume(TK::RightParen, "Expect ')' after for clauses.");
 
-            self.emit_loop(self.loop_state.as_ref().unwrap().start);
-            self.loop_state.as_mut().unwrap().start = increment_start;
+
+            let loop_start = self.loop_state().as_ref().unwrap().start;
+            self.emit_loop(loop_start);
+            self.loop_state_mut().as_mut().unwrap().start = increment_start;
             self.patch_jump(body_jump)
         }
 
+        // Alias loop variable for this iteration of the loop
+        let loop_and_inner_var = if let Some((loop_var, loop_var_name, is_const)) = loop_var_name_const {
+            self.begin_scope();
+            self.emit_bytes(OpCode::GetLocal, loop_var, line);
+            self.add_local(loop_var_name, is_const);
+            self.mark_initialized();
+            if let Ok(inner_var) = u8::try_from(self.locals().len()-1) {
+                Some((loop_var, inner_var))
+            } else {
+                self.error("Aliasing loop variable led to too many locals.");
+                None
+            }
+        } else {
+            None
+        };
+
         self.statement();
-        self.emit_loop(self.loop_state.as_ref().unwrap().start);
+
+        // Clean up alias for loop variable
+        if let Some((loop_var, inner_var)) = loop_and_inner_var {
+            self.emit_bytes(OpCode::GetLocal, inner_var, line);
+            self.emit_bytes(OpCode::SetLocal, loop_var, line);
+            self.emit_byte(OpCode::Pop, line);
+            self.end_scope();
+        }
+
+        let loop_start = self.loop_state().as_ref().unwrap().start;
+        self.emit_loop(loop_start);
 
         if let Some(exit_jump) = exit_jump {
             self.patch_jump(exit_jump);
@@ -361,7 +384,7 @@ impl<'a> Compiler<'a> {
 
         self.patch_break_jumps();
 
-        self.loop_state = old_loop_state;
+        *self.loop_state_mut() = old_loop_state;
         self.end_scope();
     }
 

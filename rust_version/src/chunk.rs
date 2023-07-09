@@ -3,7 +3,10 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 use paste::paste;
 use shrinkwraprs::Shrinkwrap;
 
-use crate::{types::Line, value::Value};
+use crate::{
+    arena::{StringId, ValueId},
+    types::Line,
+};
 
 #[derive(Shrinkwrap, Clone, Copy, Debug)]
 #[shrinkwrap(mutable)]
@@ -20,6 +23,7 @@ pub struct ConstantLongIndex(pub usize);
 pub enum OpCode {
     Constant,
     ConstantLong,
+    Closure,
 
     DefineGlobal,
     DefineGlobalLong,
@@ -30,6 +34,10 @@ pub enum OpCode {
     GetGlobalLong,
     SetGlobal,
     SetGlobalLong,
+
+    GetUpvalue,
+    SetUpvalue,
+    CloseUpvalue,
 
     GetLocal,
     GetLocalLong,
@@ -65,45 +73,33 @@ pub enum OpCode {
 }
 
 impl OpCode {
-    /// Length of the instruction in bytes, including operands
-    pub fn instruction_len(&self) -> usize {
-        use OpCode::*;
-        std::mem::size_of::<OpCode>()
-            + match self {
-                Negate | Add | Subtract | Multiply | Divide | Nil | True | False | Not
-                | Equal | Greater | Less | Print | Pop | Dup => 0,
-                Constant | GetLocal | SetLocal | GetGlobal | SetGlobal | DefineGlobal
-                | DefineGlobalConst | Call | Return => 1,
-                Jump | JumpIfFalse | Loop => 2,
-                ConstantLong
-                | GetGlobalLong
-                | SetGlobalLong
-                | DefineGlobalLong
-                | DefineGlobalConstLong
-                | GetLocalLong
-                | SetLocalLong => 3,
-            }
+    pub fn to_long(self) -> OpCode {
+        match self {
+            OpCode::GetLocal => OpCode::GetLocalLong,
+            OpCode::GetGlobal => OpCode::GetGlobalLong,
+            OpCode::SetLocal => OpCode::SetLocalLong,
+            OpCode::SetGlobal => OpCode::SetGlobalLong,
+            OpCode::DefineGlobal => OpCode::DefineGlobalLong,
+            OpCode::DefineGlobalConst => OpCode::DefineGlobalConstLong,
+            x => x,
+        }
     }
 }
 
-
-#[derive(PartialEq, Derivative, Clone)]
+#[derive(PartialEq, Eq, Derivative, Clone)]
 #[derivative(PartialOrd)]
 pub struct Chunk {
-    name: String,
+    name: StringId,
     pub code: Vec<u8>,
     #[derivative(PartialOrd = "ignore")]
     lines: Vec<(usize, Line)>,
-    constants: Vec<Value>,
+    constants: Vec<ValueId>,
 }
 
 impl Chunk {
-    pub fn new<S>(name: S) -> Self
-    where
-        S: ToString,
-    {
+    pub fn new(name: StringId) -> Self {
         Chunk {
-            name: name.to_string(),
+            name: name,
             code: Default::default(),
             lines: Default::default(),
             constants: Default::default(),
@@ -114,7 +110,7 @@ impl Chunk {
         &self.code
     }
 
-    pub fn get_constant<T>(&self, index: T) -> &Value
+    pub fn get_constant<T>(&self, index: T) -> &ValueId
     where
         T: Into<usize>,
     {
@@ -141,12 +137,12 @@ impl Chunk {
         self.code[*offset] = what.into();
     }
 
-    pub fn make_constant(&mut self, what: Value) -> ConstantLongIndex {
+    pub fn make_constant(&mut self, what: ValueId) -> ConstantLongIndex {
         self.constants.push(what);
         ConstantLongIndex(self.constants.len() - 1)
     }
 
-    pub fn write_constant(&mut self, what: Value, line: Line) -> bool {
+    pub fn write_constant(&mut self, what: ValueId, line: Line) -> bool {
         let long_index = self.make_constant(what);
         if let Ok(short_index) = u8::try_from(*long_index) {
             self.write(OpCode::Constant, line);
@@ -172,32 +168,57 @@ impl Chunk {
 
 impl std::fmt::Debug for Chunk {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "== {} ==", self.name)?;
+        writeln!(f, "== {} ==", *self.name)?;
         let mut disassembler = InstructionDisassembler::new(self);
         while disassembler.offset.as_ref() < &self.code.len() {
             write!(f, "{:?}", disassembler)?;
-            *disassembler.offset +=
-                OpCode::try_from_primitive(self.code[*disassembler.offset.as_ref()])
-                    .unwrap()
-                    .instruction_len();
+            *disassembler.offset += disassembler.instruction_len(*disassembler.offset);
         }
         Ok(())
     }
 }
 
 // Debug helpers
-pub struct InstructionDisassembler<'a> {
-    chunk: &'a Chunk,
+pub struct InstructionDisassembler<'chunk> {
+    chunk: &'chunk Chunk,
     pub offset: CodeOffset,
 }
 
-impl<'a> InstructionDisassembler<'a> {
+impl<'chunk> InstructionDisassembler<'chunk> {
     #[must_use]
-    pub fn new(chunk: &'a Chunk) -> Self {
+    pub fn new(chunk: &'chunk Chunk) -> Self {
         Self {
             chunk,
             offset: CodeOffset(0),
         }
+    }
+
+    pub fn instruction_len(&self, offset: usize) -> usize {
+        let opcode = OpCode::try_from_primitive(self.chunk.code[offset]).unwrap();
+        use OpCode::*;
+        std::mem::size_of::<OpCode>()
+            + match opcode {
+                Negate | Add | Subtract | Multiply | Divide | Nil | True | False | Not | Equal
+                | Greater | Less | Print | Pop | Dup | CloseUpvalue => 0,
+                Constant | GetLocal | SetLocal | GetGlobal | SetGlobal | DefineGlobal
+                | DefineGlobalConst | Call | Return | GetUpvalue | SetUpvalue => 1,
+                Jump | JumpIfFalse | Loop => 2,
+                ConstantLong
+                | GetGlobalLong
+                | SetGlobalLong
+                | DefineGlobalLong
+                | DefineGlobalConstLong
+                | GetLocalLong
+                | SetLocalLong => 3,
+                Closure => 1 + self.upvalue_code_len(offset),
+            }
+    }
+
+    fn upvalue_code_len(&self, closure_offset: usize) -> usize {
+        let code = self.chunk.code();
+        let constant = code[closure_offset + 1];
+        let value = &**self.chunk.get_constant(constant);
+        usize::from(value.as_function().upvalue_count) * 2
     }
 
     fn debug_constant_opcode(
@@ -212,7 +233,7 @@ impl<'a> InstructionDisassembler<'a> {
             "{:-16} {:>4} '{}'",
             name,
             *constant_index,
-            self.chunk.get_constant(*constant_index.as_ref())
+            **self.chunk.get_constant(*constant_index.as_ref())
         )
     }
 
@@ -233,7 +254,7 @@ impl<'a> InstructionDisassembler<'a> {
             "{:-16} {:>4} '{}'",
             name,
             *constant_index,
-            self.chunk.get_constant(*constant_index.as_ref())
+            **self.chunk.get_constant(*constant_index.as_ref())
         )
     }
 
@@ -278,13 +299,56 @@ impl<'a> InstructionDisassembler<'a> {
         let code = self.chunk.code();
         let jump = (usize::from(code[offset.as_ref() + 1]) << 8)
             + (usize::from(code[offset.as_ref() + 2]));
-        let target = **offset + OpCode::Jump.instruction_len();
+        let target = **offset + self.instruction_len(**offset);
         let target = if OpCode::try_from_primitive(code[**offset]).unwrap() == OpCode::Loop {
             target - jump
         } else {
             target + jump
         };
         writeln!(f, "{:-16} {:>4} -> {}", name, **offset, target)
+    }
+
+    fn debug_closure_opcode(
+        &self,
+        f: &mut std::fmt::Formatter,
+        name: &str,
+        offset: &CodeOffset,
+    ) -> std::fmt::Result {
+        let mut offset = **offset + 1;
+
+        let code = self.chunk.code();
+        //eprintln!("{:?}", &code[offset..]);
+        let constant = code[offset];
+        offset += 1;
+
+        let value = &**self.chunk.get_constant(constant);
+        writeln!(f, "{:-16} {:>4} {}", name, constant, value)?;
+
+        let function = value.as_function();
+        //eprintln!("{} {}", *function.name, function.upvalue_count);
+        for _ in 0..function.upvalue_count {
+            let is_local = code[offset];
+            offset += 1;
+
+            debug_assert!(
+                is_local == 0 || is_local == 1,
+                "is_local must be 0 or 1, got: {}",
+                is_local
+            );
+            let is_local = is_local == 1;
+
+            let index = code[offset];
+            offset += 1;
+            writeln!(
+                f,
+                "{:04}    |                     {} {}",
+                offset - 2,
+                if is_local { "local" } else { "upvalue" },
+                index
+            )?;
+        }
+
+        Ok(())
     }
 }
 
@@ -308,7 +372,7 @@ macro_rules! disassemble {
     }}
 }
 
-impl<'a> std::fmt::Debug for InstructionDisassembler<'a> {
+impl<'chunk> std::fmt::Debug for InstructionDisassembler<'chunk> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let code = self.chunk.code();
         let offset = &self.offset;
@@ -335,7 +399,7 @@ impl<'a> std::fmt::Debug for InstructionDisassembler<'a> {
                 DefineGlobal,
                 DefineGlobalConst,
                 GetGlobal,
-                SetGlobal
+                SetGlobal,
             ),
             constant_long(
                 ConstantLong,
@@ -344,12 +408,28 @@ impl<'a> std::fmt::Debug for InstructionDisassembler<'a> {
                 GetGlobalLong,
                 SetGlobalLong
             ),
-            byte(GetLocal, SetLocal, Call),
+            closure(Closure),
+            byte(GetLocal, SetLocal, Call, GetUpvalue, SetUpvalue),
             byte_long(GetLocalLong, SetLocalLong),
             jump(Jump, JumpIfFalse, Loop),
             simple(
-                Nil, True, False, Negate, Pop, Equal, Greater, Less, Add, Subtract,
-                Multiply, Divide, Not, Print, Return, Dup,
+                Nil,
+                True,
+                False,
+                Negate,
+                Pop,
+                Equal,
+                Greater,
+                Less,
+                Add,
+                Subtract,
+                Multiply,
+                Divide,
+                Not,
+                Print,
+                Return,
+                Dup,
+                CloseUpvalue
             ),
         )?;
         Ok(())

@@ -1,18 +1,67 @@
-use std::rc::Rc;
-
 use derivative::Derivative;
 
-use crate::chunk::Chunk;
+use crate::{
+    arena::{FunctionId, StringId, ValueId},
+    chunk::Chunk,
+};
 
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum Value {
     Bool(bool),
     Nil,
     Number(f64),
-    #[allow(clippy::box_collection)]
-    String(String),
-    Function(Rc<Function>),
+
+    String(StringId),
+
+    Function(FunctionId),
+    Closure(Closure),
     NativeFunction(NativeFunction),
+
+    Upvalue(Upvalue),
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Clone)]
+pub enum Upvalue {
+    Open(usize),
+    Closed(ValueId),
+}
+
+impl Upvalue {
+    pub fn as_open(&self) -> usize {
+        match self {
+            Upvalue::Open(n) => *n,
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Clone)]
+pub struct Closure {
+    pub function: FunctionId,
+    pub upvalues: Vec<ValueId>,
+    pub upvalue_count: usize,
+}
+
+impl Closure {
+    pub fn new(function: FunctionId) -> Closure {
+        let upvalue_count = function.upvalue_count;
+        Closure {
+            function,
+            upvalues: Vec::with_capacity(usize::from(upvalue_count)),
+            upvalue_count,
+        }
+    }
+}
+
+impl Value {
+    pub fn closure(function: FunctionId) -> Value {
+        let upvalue_count = function.upvalue_count;
+        Value::Closure(Closure {
+            function,
+            upvalues: Vec::with_capacity(usize::from(upvalue_count)),
+            upvalue_count,
+        })
+    }
 }
 
 impl From<bool> for Value {
@@ -27,15 +76,21 @@ impl From<f64> for Value {
     }
 }
 
-impl From<String> for Value {
-    fn from(s: String) -> Self {
+impl From<StringId> for Value {
+    fn from(s: StringId) -> Self {
         Value::String(s)
     }
 }
 
-impl From<Function> for Value {
-    fn from(f: Function) -> Self {
-        Value::Function(Rc::new(f))
+impl From<FunctionId> for Value {
+    fn from(f: FunctionId) -> Self {
+        Value::Function(f)
+    }
+}
+
+impl From<Closure> for Value {
+    fn from(c: Closure) -> Self {
+        Value::Closure(c)
     }
 }
 
@@ -46,8 +101,10 @@ impl std::fmt::Display for Value {
             Value::Number(num) => f.pad(&format!("{}", num)),
             Value::Nil => f.pad("nil"),
             Value::String(s) => f.pad(s),
-            Value::Function(fun) => f.pad(&format!("<fn {}>", fun.name)),
+            Value::Function(function_id) => f.pad(&format!("<fn {}>", *function_id.name)),
+            Value::Closure(closure) => f.pad(&format!("<fn {}>", *closure.function.name)),
             Value::NativeFunction(fun) => f.pad(&format!("<native fn {}>", fun.name)),
+            Value::Upvalue(_) => f.pad("upvalue"),
         }
     }
 }
@@ -57,31 +114,51 @@ impl Value {
         matches!(self, Self::Bool(false) | Self::Nil)
     }
 
-    pub fn as_f64(&self) -> f64 {
+    pub fn as_closure(&self) -> &Closure {
         match self {
-            Self::Number(num) => *num,
-            _ => panic!("as_64() called on non-Number Value"),
+            Value::Closure(c) => c,
+            _ => unreachable!("Expected Closure, found `{}`", self),
+        }
+    }
+
+    pub fn as_function(&self) -> &FunctionId {
+        match self {
+            Value::Function(f) => f,
+            _ => unreachable!("Expected Function, found `{}`", self),
+        }
+    }
+
+    pub fn upvalue_location(&self) -> &Upvalue {
+        match self {
+            Value::Upvalue(v) => v,
+            _ => unreachable!("Expected upvalue, found `{}`", self),
+        }
+    }
+
+    pub fn upvalue_location_mut(&mut self) -> &mut Upvalue {
+        match self {
+            Value::Upvalue(v) => v,
+            _ => unreachable!("Expected upvalue, found `{}`", self),
         }
     }
 }
 
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Clone)]
 pub struct Function {
     pub arity: usize,
     pub chunk: Chunk,
-    pub name: String,
+    pub name: StringId,
+    pub upvalue_count: usize,
 }
 
 impl Function {
     #[must_use]
-    pub fn new<S>(arity: usize, name: S) -> Self
-    where
-        S: ToString,
-    {
+    pub fn new(arity: usize, name: StringId) -> Self {
         Self {
             arity,
-            name: name.to_string(),
+            name: name,
             chunk: Chunk::new(name),
+            upvalue_count: 0,
         }
     }
 }
@@ -101,7 +178,7 @@ pub struct NativeFunction {
     pub fun: NativeFunctionImpl,
 }
 
-pub type NativeFunctionImpl = fn(&mut [Value]) -> Result<Value, String>;
+pub type NativeFunctionImpl = fn(&[Value]) -> Result<Value, String>;
 
 fn always_equals<T>(_: &T, _: &T) -> bool {
     true

@@ -6,7 +6,7 @@ use crate::{
 
 use super::Compiler;
 
-impl<'a> Compiler<'a> {
+impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
     pub(super) fn emit_byte<T>(&mut self, byte: T, line: Line)
     where
         T: Into<u8>,
@@ -39,7 +39,8 @@ impl<'a> Compiler<'a> {
         T: Into<Value>,
     {
         let line = self.line();
-        if !self.current_chunk().write_constant(value.into(), line) {
+        let value_id = self.arena.add_value(value.into());
+        if !self.current_chunk().write_constant(value_id, line) {
             self.error("Too many constants in one chunk.");
         }
     }
@@ -54,8 +55,7 @@ impl<'a> Compiler<'a> {
     }
 
     pub(super) fn patch_jump(&mut self, jump_offset: CodeOffset) {
-        let jump_length =
-            self.current_chunk().code().len() - *jump_offset - OpCode::Jump.instruction_len();
+        let jump_length = self.current_chunk().code().len() - *jump_offset - 3; // 3: length of the jump instruction + its arg
 
         if jump_length > usize::from(u16::MAX) {
             self.error("Too much code to jump over.");
@@ -68,14 +68,13 @@ impl<'a> Compiler<'a> {
     }
 
     pub(super) fn patch_break_jumps(&mut self) {
-        while let Some(break_jump) = self.loop_state.as_mut().unwrap().break_jumps.pop() {
+        while let Some(break_jump) = self.loop_state_mut().as_mut().unwrap().break_jumps.pop() {
             self.patch_jump(break_jump);
         }
     }
 
     pub(super) fn emit_loop(&mut self, loop_start: CodeOffset) {
-        let offset =
-            self.current_chunk().code().len() - *loop_start + OpCode::Loop.instruction_len();
+        let offset = self.current_chunk().code().len() - *loop_start + 3; // 3: length of the loop instruction + its arg
         let line = self.line();
 
         self.emit_byte(OpCode::Loop, line);
@@ -85,5 +84,16 @@ impl<'a> Compiler<'a> {
 
         self.emit_byte((offset >> 8) as u8, line);
         self.emit_byte(offset as u8, line);
+    }
+
+    pub(super) fn emit_number(&mut self, n: usize, long: bool) -> bool {
+        if long {
+            self.emit_24bit_number(n)
+        } else if let Ok(n) = u8::try_from(n) {
+            self.emit_byte(n, self.line());
+            true
+        } else {
+            false
+        }
     }
 }
