@@ -22,3 +22,7 @@ custom-dart-test: $(DEBUG_BIN)
 
 .PHONY: test
 test: cargo-test craftinginterpreters-test custom-dart-test
+
+.PHONE: hyperfine
+hyperfine:
+	hyperfine --warmup 1 "..\reference\craftinginterpreters\jlox.bat benchmark\fib.lox" "..\reference\craftinginterpreters\clox.exe benchmark\fib.lox" ".\target\release\rust_version.exe benchmark\fib.lox" "python benchmark\fib.py" "ruby benchmark\fib.rb"

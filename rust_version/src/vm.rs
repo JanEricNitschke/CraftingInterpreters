@@ -70,7 +70,7 @@ impl VM {
             globals: HashMap::new(),
         };
 
-        vm.define_native("clock", clock_native);
+        vm.define_native("clock", 0, clock_native);
 
         vm
     }
@@ -475,19 +475,27 @@ impl VM {
     fn call_value(&mut self, callee: Value, arg_count: u8) -> bool {
         match callee {
             Value::Function(f) => self.execute_call(f, arg_count),
-            Value::NativeFunction(NativeFunction { fun, .. }) => {
-                let start_index = self.stack.len() - usize::from(arg_count);
-                let result = fun(&mut self.stack[start_index..]);
-                self.stack
-                    .truncate(self.stack.len() - usize::from(arg_count) - 1);
-                self.stack.push(result);
-                true
-            }
+            Value::NativeFunction(f) => self.execute_native_call(f, arg_count),
             _ => {
                 runtime_error!(self, "Can only call functions and classes.");
                 false
             }
         }
+    }
+
+    fn execute_native_call(&mut self, f: NativeFunction, arg_count: u8) -> bool {
+        let arity = f.arity;
+        if arg_count != arity {
+            runtime_error!(self, "Native function '{}' expected {} arguments, got {}.", f.name, arity, arg_count);
+            return false;
+        }
+        let fun = f.fun;
+        let start_index = self.stack.len() - usize::from(arg_count);
+        let result = fun(&mut self.stack[start_index..]);
+        self.stack
+            .truncate(self.stack.len() - usize::from(arg_count) - 1);
+        self.stack.push(result);
+        true
     }
 
     fn execute_call(&mut self, f: Rc<Function>, arg_count: u8) -> bool {
@@ -511,7 +519,7 @@ impl VM {
         true
     }
 
-    pub fn define_native<S>(&mut self, name: S, fun: NativeFunctionImpl)
+    pub fn define_native<S>(&mut self, name: S, arity: u8, fun: NativeFunctionImpl)
     where
         S: ToString,
     {
@@ -520,6 +528,7 @@ impl VM {
             Global {
                 value: Value::NativeFunction(NativeFunction {
                     name: name.to_string(),
+                    arity,
                     fun: fun,
                 }),
                 mutable: false,
