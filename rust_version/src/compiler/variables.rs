@@ -1,8 +1,8 @@
 use hashbrown::hash_map::Entry;
 
 use crate::{
-    arena::StringId,
     chunk::{ConstantLongIndex, OpCode},
+    heap::StringId,
 };
 
 use super::{Compiler, Local, ScopeDepth, Upvalue};
@@ -75,16 +75,16 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
             false
         };
 
-
         // Get or set?
         let op = if can_assign && self.match_(TK::Equal) {
             self.expression();
             if set_op == OpCode::SetLocal || set_op == OpCode::SetLocalLong {
                 self.check_local_const(arg);
             }
-            set_op }else {
-                get_op
-            };
+            set_op
+        } else {
+            get_op
+        };
 
         // Generate the code.
         self.emit_byte(op.clone(), line);
@@ -99,7 +99,7 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         S: ToString,
     {
         match self.strings_by_name.entry(s.to_string()) {
-            Entry::Vacant(entry) => *entry.insert(self.arena.add_string(s.to_string())),
+            Entry::Vacant(entry) => *entry.insert(self.heap.strings.add(s.to_string())),
             Entry::Occupied(entry) => *entry.get(),
         }
     }
@@ -112,7 +112,7 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         if let Some(index) = self.globals_by_name().get(&string_id) {
             *index
         } else {
-            let value_id = self.arena.add_value(string_id.into());
+            let value_id = self.heap.values.add(string_id.into());
             let index = self.current_chunk().make_constant(value_id);
             self.globals_by_name_mut().insert(string_id, index);
             index
@@ -192,7 +192,7 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
                 return u8::try_from(upvalue_index).unwrap();
             }
 
-            if self.upvalues().len() >= usize::from(u8::MAX)+1 {
+            if self.upvalues().len() >= usize::from(u8::MAX) + 1 {
                 self.error("Too many closure variables in function.");
                 return 0;
             }
@@ -204,7 +204,7 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
             });
             let upvalue_count = self.upvalues().len();
             self.current_function_mut().upvalue_count = upvalue_count;
-            u8::try_from(upvalue_count-1).unwrap()
+            u8::try_from(upvalue_count - 1).unwrap()
         } else {
             // This is where `(Get|Set)UpvalueLong` would go
             self.error("Too variables in function surrounding closure.");
@@ -300,7 +300,6 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         self.consume(TK::RightParen, "Expect ')' after arguments.");
         arg_count
     }
-
 
     fn check_local_const(&mut self, local_index: usize) {
         let local = &self.locals()[local_index];

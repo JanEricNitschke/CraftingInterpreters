@@ -9,10 +9,10 @@ use hashbrown::HashMap;
 use shrinkwraprs::Shrinkwrap;
 
 use crate::{
-    arena::{Arena, StringId},
     chunk::{Chunk, CodeOffset, ConstantLongIndex},
     compiler::rules::{make_rules, Rules},
     config,
+    heap::{Heap, StringId},
     scanner::{Scanner, Token, TokenKind},
     types::Line,
     value::Function,
@@ -82,11 +82,11 @@ impl<'scanner> NestableState<'scanner> {
     }
 }
 
-pub struct Compiler<'scanner, 'arena> {
-    arena: &'arena mut Arena,
+pub struct Compiler<'scanner, 'heap> {
+    heap: &'heap mut Heap,
     strings_by_name: HashMap<String, StringId>,
 
-    rules: Rules<'scanner, 'arena>,
+    rules: Rules<'scanner, 'heap>,
 
     scanner: Scanner<'scanner>,
     previous: Option<Token<'scanner>>,
@@ -100,10 +100,10 @@ pub struct Compiler<'scanner, 'arena> {
 
 impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
     #[must_use]
-    pub fn new(scanner: Scanner<'scanner>, arena: &'arena mut Arena) -> Self {
-        let function_name = arena.add_string(String::from("<script>"));
+    pub fn new(scanner: Scanner<'scanner>, arena: &'arena mut Heap) -> Self {
+        let function_name = arena.strings.add(String::from("<script>"));
         Compiler {
-            arena,
+            heap: arena,
             strings_by_name: HashMap::new(),
             scanner,
             previous: None,

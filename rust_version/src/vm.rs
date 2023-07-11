@@ -3,15 +3,15 @@ use std::pin::Pin;
 
 use hashbrown::HashMap;
 
-use crate::arena::ValueId;
 use crate::chunk::InstructionDisassembler;
+use crate::heap::ValueId;
 use crate::native_functions::NativeFunctions;
 use crate::value::{Class, Closure, Instance, Upvalue};
 use crate::{
-    arena::{Arena, StringId},
     chunk::{CodeOffset, OpCode},
     compiler::Compiler,
     config,
+    heap::{Heap, StringId},
     scanner::Scanner,
     value::{NativeFunction, NativeFunctionImpl, Value},
 };
@@ -61,34 +61,9 @@ impl CallFrame {
     }
 }
 
-struct BuiltinConstants {
-    pub nil: ValueId,
-    pub true_: ValueId,
-    pub false_: ValueId,
-}
-
-impl BuiltinConstants {
-    #[must_use]
-    pub fn new(arena: &mut Arena) -> Self {
-        Self {
-            nil: arena.add_value(Value::Nil),
-            true_: arena.add_value(Value::Bool(true)),
-            false_: arena.add_value(Value::Bool(false)),
-        }
-    }
-
-    pub fn bool(&self, val: bool) -> ValueId {
-        if val {
-            self.true_
-        } else {
-            self.false_
-        }
-    }
-}
 
 pub struct VM {
-    arena: Pin<Box<Arena>>,
-    builtin_constants: BuiltinConstants,
+    heap: Pin<Box<Heap>>,
     frames: Vec<CallFrame>,
     stack: Vec<ValueId>,
     globals: HashMap<StringId, Global>,
@@ -98,10 +73,8 @@ pub struct VM {
 impl VM {
     #[must_use]
     pub fn new() -> Self {
-        let mut arena = Pin::new(Box::new(Arena::new()));
         Self {
-            builtin_constants: BuiltinConstants::new(&mut arena),
-            arena,
+            heap: Heap::new(),
             frames: Vec::with_capacity(crate::config::FRAMES_MAX),
             stack: Vec::with_capacity(crate::config::STACK_MAX),
             globals: HashMap::new(),
@@ -112,16 +85,16 @@ impl VM {
     pub fn interpret(&mut self, source: &[u8]) -> InterpretResult {
         let scanner = Scanner::new(source);
         let mut native_functions = NativeFunctions::new();
-        native_functions.create_names(&mut self.arena);
-        let mut compiler = Compiler::new(scanner, &mut self.arena);
+        native_functions.create_names(&mut self.heap);
+        let mut compiler = Compiler::new(scanner, &mut self.heap);
         native_functions.register_names(&mut compiler);
 
         let result = if let Some(function) = compiler.compile() {
             native_functions.define_functions(self);
 
-            let function_id = self.arena.add_function(function);
+            let function_id = self.heap.functions.add(function);
             let closure = Value::closure(function_id);
-            let value_id = self.arena.add_value(closure);
+            let value_id = self.heap.values.add(closure);
             self.stack_push(value_id);
             self.execute_call(value_id, 0);
             self.run()
@@ -213,9 +186,9 @@ impl VM {
                     }
                 }
                 OpCode::Not => self.not_(),
-                OpCode::Nil => self.stack_push(self.builtin_constants.nil),
-                OpCode::True => self.stack_push(self.builtin_constants.true_),
-                OpCode::False => self.stack_push(self.builtin_constants.false_),
+                OpCode::Nil => self.stack_push(self.heap.builtin_constants().nil),
+                OpCode::True => self.stack_push(self.heap.builtin_constants().true_),
+                OpCode::False => self.stack_push(self.heap.builtin_constants().false_),
                 OpCode::Equal => self.equal(),
                 OpCode::Add => {
                     if let Some(value) = self.add() {
@@ -261,7 +234,7 @@ impl VM {
                                 .push((*self.frame().closure).as_closure().upvalues[index]);
                         }
                     }
-                    let closure_id = self.arena.add_value(Value::from(closure));
+                    let closure_id = self.heap.values.add(Value::from(closure));
                     self.stack_push(closure_id);
                 }
                 OpCode::GetUpvalue => {
@@ -300,7 +273,7 @@ impl VM {
                     }
                 }
                 OpCode::CloseUpvalue => {
-                    self.close_upvalue(self.stack.len()-1);
+                    self.close_upvalue(self.stack.len() - 1);
                     self.stack.pop();
                 }
                 OpCode::Class => {
@@ -323,12 +296,17 @@ impl VM {
                     let instance = match &**self.peek(0).expect("Stack underflow in GET_PROPERTY") {
                         Value::Instance(instance) => instance.clone(),
                         x => {
-                            runtime_error!(self, "Tried to get property '{}' of non-instance `{}`.", *field, x);
+                            runtime_error!(
+                                self,
+                                "Tried to get property '{}' of non-instance `{}`.",
+                                *field,
+                                x
+                            );
                             return InterpretResult::RuntimeError;
                         }
                     };
 
-                    if let Some(value) = instance.fields.get(&field) {
+                    if let Some(value) = instance.fields.get(&self.heap.strings[&field]) {
                         self.stack.pop(); // instance
                         self.stack_push(*value);
                     } else {
@@ -337,22 +315,31 @@ impl VM {
                     }
                 }
                 OpCode::SetProperty => {
-                    let field = match &**self.read_constant(false) {
+                    let field_string_id = match &**self.read_constant(false) {
                         Value::String(string_id) => string_id.clone(),
                         x => {
                             panic!("Non-string property name to SET_PROPERTY: `{}`", x);
                         }
                     };
+                    let field = &self.heap.strings[&field_string_id];
                     match &**self.peek(1).expect("Stack underflow in SET_PROPERTY") {
                         Value::Instance(instance) => instance,
                         x => {
-                            runtime_error!(self, "Tried to set propery '{}' of non-instance `{}`", *field, x);
+                            runtime_error!(
+                                self,
+                                "Tried to set propery '{}' of non-instance `{}`",
+                                field,
+                                x
+                            );
                             return InterpretResult::RuntimeError;
                         }
                     };
                     let value = self.stack.pop().expect("Stack underflow in SET_PROPERTY");
                     let mut instance = self.stack.pop().expect("Stack underflow in SET_PROPERTY");
-                    instance.as_instance_mut().fields.insert(field, value);
+                    instance
+                        .as_instance_mut()
+                        .fields
+                        .insert(field.to_string(), value);
                     self.stack_push(value);
                 }
             };
@@ -523,9 +510,7 @@ impl VM {
     }
 
     fn negate(&mut self) -> Option<InterpretResult> {
-        let value = &mut **self
-            .peek_mut(0)
-            .expect("Stack underflow in OP_NEGATE.");
+        let value = &mut **self.peek_mut(0).expect("Stack underflow in OP_NEGATE.");
         match value {
             Value::Number(n) => *n = -*n,
             _ => {
@@ -542,7 +527,7 @@ impl VM {
             .pop()
             .expect("Stack underflow in OP_NOT.")
             .is_falsey();
-        self.stack_push(self.builtin_constants.bool(value))
+        self.stack_push(self.heap.builtin_constants().bool(value))
     }
 
     fn equal(&mut self) {
@@ -554,7 +539,7 @@ impl VM {
                 .stack
                 .pop()
                 .expect("Stack underflow in OP_EQUAL (second).");
-        self.stack_push(self.builtin_constants.bool(value));
+        self.stack_push(self.heap.builtin_constants().bool(value));
     }
 
     fn add(&mut self) -> Option<InterpretResult> {
@@ -569,8 +554,8 @@ impl VM {
                     true
                 }
                 (Value::String(a), Value::String(b)) => {
-                    // This could be optimized by allowing mutations via the arena
-                    let new_string_id = self.arena.add_string(format!("{}{}", **a, **b));
+                    // This could be optimized by allowing mutations via the heap
+                    let new_string_id = self.heap.strings.add(format!("{}{}", **a, **b));
                     self.stack.pop();
                     self.stack.pop();
                     self.stack_push_value(new_string_id.into());
@@ -644,7 +629,7 @@ impl VM {
 
     #[inline]
     fn stack_push_value(&mut self, value: Value) {
-        let value_id = self.arena.add_value(value);
+        let value_id = self.heap.values.add(value);
         self.stack.push(value_id);
     }
 
@@ -677,7 +662,7 @@ impl VM {
             Value::Closure(_) => self.execute_call(callee, arg_count),
             Value::NativeFunction(f) => self.execute_native_call(f, arg_count),
             Value::Class(_) => {
-                let instance_id: ValueId = self.arena.add_value(Instance::new(callee).into());
+                let instance_id: ValueId = self.heap.values.add(Instance::new(callee).into());
                 //Replace the class with the instance on the stack
                 let stack_index = self.stack_base() + 1;
                 self.stack[stack_index] = instance_id;
@@ -711,15 +696,12 @@ impl VM {
         }
         let fun = f.fun;
         let start_index = self.stack.len() - usize::from(arg_count);
-        let args = self.stack[start_index..]
-            .iter()
-            .map(|v| (**v).clone())
-            .collect::<Vec<_>>();
-        match fun(&args, &mut self.arena) {
+        let args = self.stack[start_index..].iter().collect::<Vec<_>>();
+        match fun(&mut self.heap, &args) {
             Ok(value) => {
                 self.stack
                     .truncate(self.stack.len() - usize::from(arg_count) - 1);
-                self.stack_push_value(value);
+                self.stack_push(value);
                 true
             }
             Err(e) => {
@@ -749,7 +731,7 @@ impl VM {
         }
 
         let upvalue = Value::Upvalue(Upvalue::Open(local));
-        let upvalue_id = self.arena.add_value(upvalue);
+        let upvalue_id = self.heap.values.add(upvalue);
         self.open_upvalues.insert(upvalue_index, upvalue_id);
 
         upvalue_id
@@ -815,7 +797,7 @@ impl VM {
             arity,
             fun,
         });
-        let value_id = self.arena.add_value(value);
+        let value_id = self.heap.values.add(value);
         self.globals.insert(
             name,
             Global {
@@ -826,31 +808,28 @@ impl VM {
     }
 
     fn collect_garbage(&mut self, stress_gc: bool) {
-        if !stress_gc  && !self.arena.needs_gc() {
+        if !stress_gc && !self.heap.needs_gc() {
             return;
         }
 
-        self.arena.gc_start();
+        self.heap.gc_start();
 
         // Mark roots
         for value in &self.stack {
-            self.arena.mark_value(value);
+            self.heap.values.mark(value);
         }
         for value in self.globals.values() {
-            self.arena.mark_value(&value.value);
+            self.heap.values.mark(&value.value);
         }
         for frame in &self.frames {
-            self.arena.mark_function(&frame.closure().function);
+            self.heap.functions.mark(&frame.closure().function);
         }
         for upvalue in &self.open_upvalues {
-            self.arena.mark_value(upvalue);
+            self.heap.values.mark(upvalue);
         }
-        self.arena.mark_value(&self.builtin_constants.nil);
-        self.arena.mark_value(&self.builtin_constants.false_);
-        self.arena.mark_value(&self.builtin_constants.true_);
 
         // Trace references
-        self.arena.trace();
+        self.heap.trace();
 
         // Remove references to unmarked strings in `self.globals`
         let globals_to_remove = self
@@ -864,6 +843,6 @@ impl VM {
         }
 
         // Finally, sweep
-        self.arena.sweep();
+        self.heap.sweep();
     }
 }

@@ -6,11 +6,11 @@ use vm::InterpretResult;
 
 use crate::vm::VM;
 
-mod arena;
 mod bitwise;
 mod chunk;
 mod compiler;
 mod config;
+mod heap;
 mod native_functions;
 mod scanner;
 mod types;
@@ -25,7 +25,6 @@ struct Args {
     // /// Standards mode: compatibility with standard `clox`. Passes the standard `clox` test suite.
     // #[arg(long)]
     // std: bool,
-
     #[arg(long)]
     trace_execution: bool,
 

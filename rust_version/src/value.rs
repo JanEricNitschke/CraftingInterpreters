@@ -2,8 +2,8 @@ use derivative::Derivative;
 use hashbrown::HashMap;
 
 use crate::{
-    arena::{Arena, FunctionId, StringId, ValueId},
     chunk::Chunk,
+    heap::{FunctionId, Heap, StringId, ValueId},
 };
 
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
@@ -24,7 +24,7 @@ pub enum Value {
     Instance(Instance),
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum Upvalue {
     Open(usize),
     Closed(ValueId),
@@ -39,7 +39,7 @@ impl Upvalue {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub struct Closure {
     pub function: FunctionId,
     pub upvalues: Vec<ValueId>,
@@ -122,7 +122,10 @@ impl std::fmt::Display for Value {
             Value::NativeFunction(fun) => f.pad(&format!("<native fn {}>", fun.name)),
             Value::Upvalue(_) => f.pad("upvalue"),
             Value::Class(c) => f.pad(&format!("<class {}>", *c.name)),
-            Value::Instance(instance) => f.pad(&format!("<{} instance>",*(*instance.class).as_class().name))
+            Value::Instance(instance) => f.pad(&format!(
+                "<{} instance>",
+                *(*instance.class).as_class().name
+            )),
         }
     }
 }
@@ -175,7 +178,7 @@ impl Value {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub struct Function {
     pub arity: usize,
     pub chunk: Chunk,
@@ -216,7 +219,7 @@ pub struct NativeFunction {
     pub fun: NativeFunctionImpl,
 }
 
-pub type NativeFunctionImpl = fn(&[Value], arena: &mut Arena) -> Result<Value, String>;
+pub type NativeFunctionImpl = fn(&mut Heap, &[&ValueId]) -> Result<ValueId, String>;
 
 fn always_equals<T>(_: &T, _: &T) -> bool {
     true
@@ -239,12 +242,15 @@ impl Class {
 pub struct Instance {
     pub class: ValueId,
     #[derivative(PartialOrd = "ignore")]
-    pub fields: HashMap<StringId, ValueId>,
+    pub fields: HashMap<String, ValueId>,
 }
 
 impl Instance {
     #[must_use]
     pub fn new(class: ValueId) -> Self {
-        Instance { class, fields: HashMap::new() }
+        Instance {
+            class,
+            fields: HashMap::new(),
+        }
     }
 }
