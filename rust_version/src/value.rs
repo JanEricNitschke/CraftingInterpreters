@@ -51,7 +51,7 @@ impl Closure {
         let upvalue_count = function.upvalue_count;
         Closure {
             function,
-            upvalues: Vec::with_capacity(usize::from(upvalue_count)),
+            upvalues: Vec::with_capacity(upvalue_count),
             upvalue_count,
         }
     }
@@ -62,7 +62,7 @@ impl Value {
         let upvalue_count = function.upvalue_count;
         Value::Closure(Closure {
             function,
-            upvalues: Vec::with_capacity(usize::from(upvalue_count)),
+            upvalues: Vec::with_capacity(upvalue_count),
             upvalue_count,
         })
     }
@@ -151,7 +151,7 @@ impl Value {
 
     pub fn as_class(&self) -> &Class {
         match self {
-            Value::Class(c) => &c,
+            Value::Class(c) => c,
             _ => unreachable!("Expected Class, found `{}`", self),
         }
     }

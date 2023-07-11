@@ -192,7 +192,7 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
                 return u8::try_from(upvalue_index).unwrap();
             }
 
-            if self.upvalues().len() >= usize::from(u8::MAX) + 1 {
+            if self.upvalues().len() > usize::from(u8::MAX) {
                 self.error("Too many closure variables in function.");
                 return 0;
             }
