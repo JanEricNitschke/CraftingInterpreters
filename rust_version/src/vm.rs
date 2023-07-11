@@ -137,6 +137,7 @@ impl VM {
 
     fn run(&mut self) -> InterpretResult {
         let trace_execution = config::TRACE_EXECUTION.load();
+        let stress_gc = config::STRESS_GC.load();
         loop {
             if trace_execution {
                 let function = &self.frame().closure().function;
@@ -153,6 +154,7 @@ impl VM {
                 );
                 print!("{:?}", disassembler);
             }
+            self.collect_garbage(stress_gc);
             match OpCode::try_from(self.read_byte("instruction"))
                 .expect("Internal error: unrecognized opcode")
             {
@@ -747,5 +749,47 @@ impl VM {
                 mutable: false,
             },
         );
+    }
+
+    fn collect_garbage(&mut self, stress_gc: bool) {
+        if !stress_gc { //  && !self.arena.needs_gc()
+            return;
+        }
+
+        self.arena.gc_start();
+
+        // Mark roots
+        for value in &self.stack {
+            self.arena.mark_value(value);
+        }
+        for value in self.globals.values() {
+            self.arena.mark_value(&value.value);
+        }
+        for frame in &self.frames {
+            self.arena.mark_function(&frame.closure().function);
+        }
+        for upvalue in &self.open_upvalues {
+            self.arena.mark_value(upvalue);
+        }
+        self.arena.mark_value(&self.builtin_constants.nil);
+        self.arena.mark_value(&self.builtin_constants.false_);
+        self.arena.mark_value(&self.builtin_constants.true_);
+
+        // Trace references
+        self.arena.trace();
+
+        // Remove references to unmarked strings in `self.globals`
+        let globals_to_remove = self
+            .globals
+            .keys()
+            .filter(|string_id| !string_id.marked())
+            .cloned()
+            .collect::<Vec<_>>();
+        for id in globals_to_remove {
+            self.globals.remove(&id);
+        }
+
+        // Finally, sweep
+        self.arena.sweep();
     }
 }
