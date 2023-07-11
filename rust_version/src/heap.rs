@@ -149,12 +149,10 @@ impl<V: ArenaValue> Arena<V> {
             if !retain {
                 self.bytes_allocated -= std::mem::size_of::<V>();
             }
-            value.marked = false;
             if !retain {
                 to_remove.push(*key);
             }
         }
-
         for key in to_remove {
             self.data.remove(&key);
             self.free_keys.push(key);
@@ -344,7 +342,7 @@ impl Heap {
         for constant in function.chunk.constants() {
             self.values.gray.push(constant.id);
         }
-        self.strings.mark_raw(index, self.black_value);
+        self.functions.mark_raw(index, self.black_value);
     }
 
     pub fn sweep(&mut self) {
