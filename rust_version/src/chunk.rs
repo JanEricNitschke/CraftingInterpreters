@@ -118,7 +118,7 @@ pub struct Chunk {
 impl Chunk {
     pub fn new(name: StringId) -> Self {
         Chunk {
-            name: name,
+            name,
             code: Default::default(),
             lines: Default::default(),
             constants: Default::default(),

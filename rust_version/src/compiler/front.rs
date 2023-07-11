@@ -48,10 +48,9 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
     }
 
     pub(super) fn check(&self, kind: TK) -> bool {
-        return self
-            .current_token_kind()
+        self.current_token_kind()
             .map(|k| k == kind)
-            .unwrap_or(false);
+            .unwrap_or(false)
     }
 
     pub(super) fn check_previous(&self, kind: TK) -> bool {

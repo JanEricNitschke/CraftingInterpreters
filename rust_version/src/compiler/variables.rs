@@ -87,7 +87,7 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         };
 
         // Generate the code.
-        self.emit_byte(op.clone(), line);
+        self.emit_byte(op, line);
 
         if !self.emit_number(arg, long) {
             self.error(&format!("Too many globals in {:?}", op));

@@ -197,7 +197,7 @@ impl Function {
     pub fn new(arity: usize, name: StringId) -> Self {
         Self {
             arity,
-            name: name,
+            name,
             chunk: Chunk::new(name),
             upvalue_count: 0,
         }
