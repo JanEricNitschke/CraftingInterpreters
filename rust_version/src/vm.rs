@@ -6,7 +6,7 @@ use hashbrown::HashMap;
 use crate::arena::ValueId;
 use crate::chunk::InstructionDisassembler;
 use crate::native_functions::NativeFunctions;
-use crate::value::{Closure, Upvalue};
+use crate::value::{Class, Closure, Instance, Upvalue};
 use crate::{
     arena::{Arena, StringId},
     chunk::{CodeOffset, OpCode},
@@ -303,8 +303,15 @@ impl VM {
                     self.close_upvalue(self.stack.len()-1);
                     self.stack.pop();
                 }
-                #[allow(unreachable_patterns)]
-                _ => {}
+                OpCode::Class => {
+                    let class = match &**self.read_constant(false) {
+                        Value::String(string_id) => Class::new(*string_id),
+                        x => {
+                            panic!("Non-string operand to OP_CLASS: `{}`", x);
+                        }
+                    };
+                    self.stack_push_value(class.into());
+                }
             };
         }
     }
@@ -609,6 +616,13 @@ impl VM {
         match &*callee {
             Value::Closure(_) => self.execute_call(callee, arg_count),
             Value::NativeFunction(f) => self.execute_native_call(f, arg_count),
+            Value::Class(_) => {
+                let instance_id: ValueId = self.arena.add_value(Instance::new(callee).into());
+                //Replace the class with the instance on the stack
+                let stack_index = self.stack_base() + 1;
+                self.stack[stack_index] = instance_id;
+                true
+            }
             _ => {
                 runtime_error!(self, "Can only call functions and classes.");
                 false
@@ -752,7 +766,7 @@ impl VM {
     }
 
     fn collect_garbage(&mut self, stress_gc: bool) {
-        if !stress_gc { //  && !self.arena.needs_gc()
+        if !stress_gc  && !self.arena.needs_gc() {
             return;
         }
 

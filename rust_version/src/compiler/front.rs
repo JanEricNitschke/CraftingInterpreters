@@ -1,7 +1,7 @@
 use super::{rules::Precedence, Compiler, FunctionType, LoopState};
 
 use crate::{
-    chunk::{CodeOffset, OpCode},
+    chunk::{CodeOffset, ConstantIndex, OpCode},
     scanner::TokenKind as TK,
     types::Line,
 };
@@ -115,6 +115,23 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         }
     }
 
+    fn class_declaration(&mut self) {
+        self.consume(TK::Identifier, "Expect class name.");
+        let name_constant =
+            self.identifier_constant(self.previous.as_ref().unwrap().as_str().to_string());
+        self.declare_variable(true);
+        self.emit_bytes(
+            OpCode::Class,
+            ConstantIndex::try_from(name_constant)
+                .expect("Too many constants when declaring class."),
+            self.line(),
+        );
+        self.define_variable(Some(name_constant), true);
+
+        self.consume(TK::LeftBrace, "Expect '{' before class body.");
+        self.consume(TK::RightBrace, "Expect '}' after class body.");
+    }
+
     fn fun_declaration(&mut self) {
         let global = self.parse_variable("Expect function name.", true);
         self.mark_initialized();
@@ -187,7 +204,9 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
     }
 
     pub(super) fn declaration(&mut self) {
-        if self.match_(TK::Fun) {
+        if self.match_(TK::Class) {
+            self.class_declaration();
+        } else if self.match_(TK::Fun) {
             self.fun_declaration();
         } else if self.match_(TK::Var) {
             self.var_declaration(true);
@@ -272,7 +291,14 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         let old_loop_state = {
             let start = CodeOffset(self.current_chunk_len());
             let depth = self.scope_depth();
-            std::mem::replace(self.loop_state_mut(), Some(LoopState{depth, start, break_jumps: Vec::new()}))
+            std::mem::replace(
+                self.loop_state_mut(),
+                Some(LoopState {
+                    depth,
+                    start,
+                    break_jumps: Vec::new(),
+                }),
+            )
         };
         self.consume(TK::LeftParen, "Expect '(' after 'while'.");
         self.expression();
@@ -296,7 +322,7 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         let line = self.line();
 
         // Compile initializer, store loop variable
-        let loop_var_name_const =       if self.match_(TK::Semicolon) {
+        let loop_var_name_const = if self.match_(TK::Semicolon) {
             // No initializer
             None
         } else if self.match_(TK::Var) || self.match_(TK::Const) {
@@ -304,7 +330,7 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
             let is_const = self.check_previous(TK::Var);
             self.var_declaration(is_const);
             // Challenge 25/2: alias loop variables
-            if let Ok(loop_var) = u8::try_from(self.locals().len() -1) {
+            if let Ok(loop_var) = u8::try_from(self.locals().len() - 1) {
                 Some((loop_var, name, is_const))
             } else {
                 self.error("Creating loop variable led to too many locals.");
@@ -319,9 +345,15 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         let old_loop_state = {
             let start = CodeOffset(self.current_chunk_len());
             let depth = self.scope_depth();
-            std::mem::replace(self.loop_state_mut(), Some(LoopState{depth, start, break_jumps: Vec::new()}))
+            std::mem::replace(
+                self.loop_state_mut(),
+                Some(LoopState {
+                    depth,
+                    start,
+                    break_jumps: Vec::new(),
+                }),
+            )
         };
-
 
         // Compile increment clause
         let mut exit_jump = None;
@@ -341,7 +373,6 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
             self.emit_byte(OpCode::Pop, line);
             self.consume(TK::RightParen, "Expect ')' after for clauses.");
 
-
             let loop_start = self.loop_state().as_ref().unwrap().start;
             self.emit_loop(loop_start);
             self.loop_state_mut().as_mut().unwrap().start = increment_start;
@@ -349,20 +380,21 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         }
 
         // Alias loop variable for this iteration of the loop
-        let loop_and_inner_var = if let Some((loop_var, loop_var_name, is_const)) = loop_var_name_const {
-            self.begin_scope();
-            self.emit_bytes(OpCode::GetLocal, loop_var, line);
-            self.add_local(loop_var_name, is_const);
-            self.mark_initialized();
-            if let Ok(inner_var) = u8::try_from(self.locals().len()-1) {
-                Some((loop_var, inner_var))
+        let loop_and_inner_var =
+            if let Some((loop_var, loop_var_name, is_const)) = loop_var_name_const {
+                self.begin_scope();
+                self.emit_bytes(OpCode::GetLocal, loop_var, line);
+                self.add_local(loop_var_name, is_const);
+                self.mark_initialized();
+                if let Ok(inner_var) = u8::try_from(self.locals().len() - 1) {
+                    Some((loop_var, inner_var))
+                } else {
+                    self.error("Aliasing loop variable led to too many locals.");
+                    None
+                }
             } else {
-                self.error("Aliasing loop variable led to too many locals.");
                 None
-            }
-        } else {
-            None
-        };
+            };
 
         self.statement();
 

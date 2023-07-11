@@ -1,7 +1,7 @@
 CRAFTING_INTERPRETERS := ../reference/craftinginterpreters
 DEBUG_BIN := target/debug/rust_version.exe
 
-test_level := chap25_closures
+test_level := chap26_garbage
 sources := src/*.rs src/compiler/*.rs Cargo.toml
 
 $(DEBUG_BIN): $(sources)
@@ -27,4 +27,4 @@ test: cargo-test craftinginterpreters-test custom-dart-test
 
 .PHONE: hyperfine
 hyperfine:
-	hyperfine --warmup 1 "..\reference\craftinginterpreters\jlox.bat benchmark\fib.lox" "..\reference\craftinginterpreters\clox.exe benchmark\fib.lox" ".\target\release\rust_version.exe benchmark\fib.lox" "python benchmark\fib.py" "ruby benchmark\fib.rb"
+	hyperfine --warmup 1 "..\reference\craftinginterpreters\jlox.bat benchmark\fib.lox" "..\reference\craftinginterpreters\clox.exe benchmark\fib.lox" ".\target\release\rust_version.exe benchmark\fib.lox" ".\target\release\rust_version.exe --stress-gc benchmark\fib.lox" "python benchmark\fib.py" "ruby benchmark\fib.rb"

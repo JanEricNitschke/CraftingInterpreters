@@ -60,7 +60,7 @@ macro_rules! arena_methods {
                              );
                 }
 
-                // self.bytes_allocated += std::mem::size_of::<$t>();
+                self.bytes_allocated += std::mem::size_of::<$t>();
 
                 [<$t Id>] {
                     id,
@@ -88,9 +88,9 @@ macro_rules! arena_methods {
                                   value
                                  );
                     }
-                    // if !retain {
-                    //     self.bytes_allocated -= std::mem::size_of::<$t>();
-                    // }
+                    if !retain {
+                        self.bytes_allocated -= std::mem::size_of::<$t>();
+                    }
                     *marked = false;
                     retain
                 });
@@ -235,6 +235,9 @@ pub struct Arena {
     gray_strings: Vec<usize>,
     gray_values: Vec<usize>,
     gray_functions: Vec<usize>,
+
+    bytes_allocated: usize,
+    next_gc: usize,
 }
 
 impl Arena {
@@ -248,6 +251,8 @@ impl Arena {
             gray_strings: Vec::new(),
             gray_values: Vec::new(),
             gray_functions: Vec::new(),
+            bytes_allocated: 0,
+            next_gc: 1024 * 1024,
         }
     }
 
@@ -255,9 +260,9 @@ impl Arena {
     arena_methods!(Value);
     arena_methods!(Function);
 
-    // pub fn needs_gc(&self) -> bool {
-    //     self.bytes_allocated > self.next_gc
-    // }
+    pub fn needs_gc(&self) -> bool {
+        self.bytes_allocated > self.next_gc
+    }
 
     pub fn gc_start(&self) {
         if self.log_gc {
@@ -300,6 +305,14 @@ impl Arena {
                 }
             }
             Value::Upvalue(Upvalue::Closed(value_id)) => self.gray_values.push(value_id.id),
+            Value::Class(c) => self.gray_strings.push(c.name.id),
+            Value::Instance(instance) => {
+                self.gray_values.push(instance.class.id);
+                for (field, value) in instance.fields.iter() {
+                    self.gray_strings.push(field.id);
+                    self.gray_values.push(value.id);
+                }
+            }
         }
     }
 
@@ -326,12 +339,22 @@ impl Arena {
         if self.log_gc {
             eprintln!("-- sweep start");
         }
+
+        let before = self.bytes_allocated;
         self.sweep_values();
         self.sweep_functions();
         self.sweep_strings();
 
+        self.next_gc = self.bytes_allocated * crate::config::GC_HEAP_GROW_FACTOR;
         if self.log_gc {
             eprintln!("-- gc end");
+            eprintln!(
+                "   collected {} (from {} to {}) next at {}",
+                humansize::format_size(before - self.bytes_allocated, humansize::BINARY),
+                humansize::format_size(before, humansize::BINARY),
+                humansize::format_size(self.bytes_allocated, humansize::BINARY),
+                humansize::format_size(self.next_gc, humansize::BINARY),
+            );
         }
     }
 }

@@ -1,7 +1,8 @@
 use derivative::Derivative;
+use hashbrown::HashMap;
 
 use crate::{
-    arena::{FunctionId, StringId, ValueId, Arena},
+    arena::{Arena, FunctionId, StringId, ValueId},
     chunk::Chunk,
 };
 
@@ -18,6 +19,9 @@ pub enum Value {
     NativeFunction(NativeFunction),
 
     Upvalue(Upvalue),
+
+    Class(Class),
+    Instance(Instance),
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Clone)]
@@ -94,6 +98,18 @@ impl From<Closure> for Value {
     }
 }
 
+impl From<Class> for Value {
+    fn from(c: Class) -> Self {
+        Value::Class(c)
+    }
+}
+
+impl From<Instance> for Value {
+    fn from(i: Instance) -> Self {
+        Value::Instance(i)
+    }
+}
+
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -105,6 +121,8 @@ impl std::fmt::Display for Value {
             Value::Closure(closure) => f.pad(&format!("<fn {}>", *closure.function.name)),
             Value::NativeFunction(fun) => f.pad(&format!("<native fn {}>", fun.name)),
             Value::Upvalue(_) => f.pad("upvalue"),
+            Value::Class(c) => f.pad(&format!("<class {}>", *c.name)),
+            Value::Instance(instance) => f.pad(&format!("<{} instance>",*(*instance.class).as_class().name))
         }
     }
 }
@@ -125,6 +143,13 @@ impl Value {
         match self {
             Value::Function(f) => f,
             _ => unreachable!("Expected Function, found `{}`", self),
+        }
+    }
+
+    pub fn as_class(&self) -> &Class {
+        match self {
+            Value::Class(c) => &c,
+            _ => unreachable!("Expected Class, found `{}`", self),
         }
     }
 
@@ -188,4 +213,31 @@ pub type NativeFunctionImpl = fn(&[Value], arena: &mut Arena) -> Result<Value, S
 
 fn always_equals<T>(_: &T, _: &T) -> bool {
     true
+}
+
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
+pub struct Class {
+    pub name: StringId,
+}
+
+impl Class {
+    #[must_use]
+    pub fn new(name: StringId) -> Self {
+        Class { name }
+    }
+}
+
+#[derive(Derivative)]
+#[derivative(Debug, PartialEq, PartialOrd, Clone)]
+pub struct Instance {
+    pub class: ValueId,
+    #[derivative(PartialOrd = "ignore")]
+    pub fields: HashMap<StringId, ValueId>,
+}
+
+impl Instance {
+    #[must_use]
+    pub fn new(class: ValueId) -> Self {
+        Instance { class, fields: HashMap::new() }
+    }
 }
