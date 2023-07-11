@@ -156,7 +156,9 @@ impl NativeFunctions {
     }
 
     pub fn create_names(&mut self, heap: &mut Heap) {
-        for name in ["clock", "sqrt", "input", "number", "getattr", "setattr", "hasattr", "delattr"] {
+        for name in [
+            "clock", "sqrt", "input", "number", "getattr", "setattr", "hasattr", "delattr",
+        ] {
             let string_id = heap.strings.add(name.to_string());
             self.string_ids.insert(name.to_string(), string_id);
         }

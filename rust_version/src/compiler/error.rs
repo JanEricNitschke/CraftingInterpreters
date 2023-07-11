@@ -1,7 +1,6 @@
 use super::Compiler;
 use crate::scanner::{Token, TokenKind as TK};
 
-
 impl<'compiler, 'arena> Compiler<'compiler, 'arena> {
     pub(super) fn error_at_current(&mut self, msg: &str) {
         self.error_at(self.current.clone(), msg);
@@ -27,7 +26,6 @@ impl<'compiler, 'arena> Compiler<'compiler, 'arena> {
         }
         self.had_error = true;
     }
-
 
     pub(super) fn synchronize(&mut self) {
         self.panic_mode = false;
