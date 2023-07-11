@@ -153,6 +153,13 @@ impl Value {
         }
     }
 
+    pub fn as_instance_mut(&mut self) -> &mut Instance {
+        match self {
+            Value::Instance(i) => i,
+            _ => unreachable!("Expected Instance, found `{}`", self),
+        }
+    }
+
     pub fn upvalue_location(&self) -> &Upvalue {
         match self {
             Value::Upvalue(v) => v,
