@@ -61,7 +61,6 @@ impl CallFrame {
     }
 }
 
-
 pub struct VM {
     heap: Pin<Box<Heap>>,
     frames: Vec<CallFrame>,
@@ -121,7 +120,7 @@ impl VM {
                     "          [{}]",
                     self.stack
                         .iter()
-                        .map(|v| format!("{}", **v))
+                        .map(|v| format!("{}", self.heap.values[v]))
                         .collect::<Vec<_>>()
                         .join(", ")
                 );
@@ -142,7 +141,7 @@ impl VM {
                 }
                 OpCode::Dup => {
                     self.stack_push_value(
-                        (**self.peek(0).expect("stack underflow in OP_DUP")).clone(),
+                        self.heap.values[self.peek(0).expect("stack underflow in OP_DUP")].clone(),
                     );
                 }
                 op @ (OpCode::GetLocal | OpCode::GetLocalLong) => self.get_local(op),
@@ -261,7 +260,7 @@ impl VM {
                     let new_value = self
                         .stack
                         .last()
-                        .map(|x| (**x).clone())
+                        .map(|x| self.heap.values[x].clone())
                         .expect("Stack underflow in OP_SET_UPVALUE");
                     match upvalue_location {
                         Upvalue::Open(absolute_local_index) => {
@@ -277,7 +276,8 @@ impl VM {
                     self.stack.pop();
                 }
                 OpCode::Class => {
-                    let class = match &**self.read_constant(false) {
+                    let constant = *self.read_constant(false);
+                    let class = match &self.heap.values[&constant] {
                         Value::String(string_id) => Class::new(*string_id),
                         x => {
                             panic!("Non-string operand to OP_CLASS: `{}`", x);
@@ -286,14 +286,17 @@ impl VM {
                     self.stack_push_value(class.into());
                 }
                 OpCode::GetProperty => {
-                    let field = match &**self.read_constant(false) {
+                    let constant = *self.read_constant(false);
+                    let field = match &self.heap.values[&constant] {
                         Value::String(string_id) => string_id.clone(),
                         x => {
                             panic!("Non-string property name to GET_PROPERTY: `{}`", x);
                         }
                     };
 
-                    let instance = match &**self.peek(0).expect("Stack underflow in GET_PROPERTY") {
+                    let instance = match &self.heap.values
+                        [self.peek(0).expect("Stack underflow in GET_PROPERTY")]
+                    {
                         Value::Instance(instance) => instance.clone(),
                         x => {
                             runtime_error!(
@@ -315,14 +318,16 @@ impl VM {
                     }
                 }
                 OpCode::SetProperty => {
-                    let field_string_id = match &**self.read_constant(false) {
+                    let constant = *self.read_constant(false);
+                    let field_string_id = match &self.heap.values[&constant] {
                         Value::String(string_id) => string_id.clone(),
                         x => {
                             panic!("Non-string property name to SET_PROPERTY: `{}`", x);
                         }
                     };
                     let field = &self.heap.strings[&field_string_id];
-                    match &**self.peek(1).expect("Stack underflow in SET_PROPERTY") {
+                    match &self.heap.values[self.peek(1).expect("Stack underflow in SET_PROPERTY")]
+                    {
                         Value::Instance(instance) => instance,
                         x => {
                             runtime_error!(
@@ -355,21 +360,14 @@ impl VM {
         }
     }
 
-    fn peek_mut(&mut self, n: usize) -> Option<&mut ValueId> {
-        let len = self.stack.len();
-        if n >= len {
-            None
-        } else {
-            Some(&mut self.stack[len - n - 1])
-        }
-    }
-
     fn binary_op<T: Into<Value>>(&mut self, op: BinaryOp<T>) -> bool {
         let slice_start = self.stack.len() - 2;
 
-        let ok = match &mut self.stack[slice_start..] {
+        let ok = match &self.stack[slice_start..] {
             [left, right] => {
-                if let (Value::Number(a), Value::Number(b)) = (&**left, &**right) {
+                if let (Value::Number(a), Value::Number(b)) =
+                    (&self.heap.values[left], &self.heap.values[right])
+                {
                     let value = op(*a, *b).into();
                     self.stack.pop();
                     self.stack.pop();
@@ -408,11 +406,12 @@ impl VM {
 
     fn get_global(&mut self, op: OpCode) -> Option<InterpretResult> {
         let constant_index = self.read_constant_index(op == OpCode::GetGlobalLong);
-        match &**self.read_constant_value(constant_index) {
+        let constant_value = *self.read_constant_value(constant_index);
+        match &self.heap.values[&constant_value] {
             Value::String(name) => match self.globals.get(name) {
                 Some(global) => self.stack_push(global.value),
                 None => {
-                    runtime_error!(self, "Undefined variable '{}'.", **name);
+                    runtime_error!(self, "Undefined variable '{}'.", self.heap.strings[name]);
                     return Some(InterpretResult::RuntimeError);
                 }
             },
@@ -423,8 +422,8 @@ impl VM {
 
     fn set_global(&mut self, op: OpCode) -> Option<InterpretResult> {
         let constant_index = self.read_constant_index(op == OpCode::SetGlobalLong);
-
-        let name = match &**self.read_constant_value(constant_index) {
+        let constant_value = *self.read_constant_value(constant_index);
+        let name = match &self.heap.values[&constant_value] {
             Value::String(name) => *name,
             x => panic!(
                 "Internal error: non-string operand to OP_SET_GLOBAL: {:?}",
@@ -450,7 +449,8 @@ impl VM {
     }
 
     fn define_global(&mut self, op: OpCode) {
-        match &**self.read_constant(op == OpCode::DefineGlobalLong) {
+        let constant = *self.read_constant(op == OpCode::DefineGlobalLong);
+        match &self.heap.values[&constant] {
             Value::String(name) => {
                 let name = *name;
                 self.globals.insert(
@@ -510,7 +510,8 @@ impl VM {
     }
 
     fn negate(&mut self) -> Option<InterpretResult> {
-        let value = &mut **self.peek_mut(0).expect("Stack underflow in OP_NEGATE.");
+        let value_id = self.peek(0).expect("stack underflow in OP_NEGATE").clone();
+        let value = &mut self.heap.values[&value_id];
         match value {
             Value::Number(n) => *n = -*n,
             _ => {
@@ -544,8 +545,8 @@ impl VM {
 
     fn add(&mut self) -> Option<InterpretResult> {
         let slice_start = self.stack.len() - 2;
-        let ok = match &mut self.stack[slice_start..] {
-            [left, right] => match (&mut **left, &**right) {
+        let ok = match &self.stack[slice_start..] {
+            [left, right] => match (&self.heap.values[left], &self.heap.values[right]) {
                 (Value::Number(a), Value::Number(b)) => {
                     let value = (*a + *b).into();
                     self.stack.pop();
@@ -555,7 +556,8 @@ impl VM {
                 }
                 (Value::String(a), Value::String(b)) => {
                     // This could be optimized by allowing mutations via the heap
-                    let new_string_id = self.heap.strings.add(format!("{}{}", **a, **b));
+                    let new_string = format!("{}{}", self.heap.strings[a], self.heap.strings[b]);
+                    let new_string_id = self.heap.strings.add(new_string);
                     self.stack.pop();
                     self.stack.pop();
                     self.stack_push_value(new_string_id.into());
@@ -572,7 +574,7 @@ impl VM {
                 "Operands must be two numbers or two strings. Got: [{}]",
                 self.stack[slice_start..]
                     .iter()
-                    .map(|v| format!("{}", **v))
+                    .map(|v| format!("{}", self.heap.values[v]))
                     .collect::<Vec<_>>()
                     .join(", ")
             );

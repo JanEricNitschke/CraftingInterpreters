@@ -20,16 +20,16 @@ fn clock_native(heap: &mut Heap, _args: &[&ValueId]) -> Result<ValueId, String> 
 }
 
 fn sqrt_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
-    match &**args[0] {
+    match &heap.values[args[0]] {
         Value::Number(n) => Ok(heap.values.add(n.sqrt().into())),
         x => Err(format!("'sqrt' expected numeric argument, got: {}", *x)),
     }
 }
 
 fn input_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
-    match &**args[0] {
+    match &heap.values[args[0]] {
         Value::String(prompt) => {
-            println!("{}", (**prompt).clone());
+            println!("{}", &heap.strings[prompt].clone());
             let mut choice = String::new();
             match io::stdin().read_line(&mut choice) {
                 Ok(_) => {
@@ -44,15 +44,15 @@ fn input_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
 }
 
 fn to_number_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
-    match &**args[0] {
-        Value::String(prompt) => {
-            let prompt = (**prompt).clone();
-            let converted: Result<f64, _> = prompt.parse();
+    match &heap.values[args[0]] {
+        Value::String(string_id) => {
+            let string = &heap.strings[string_id];
+            let converted: Result<f64, _> = string.parse();
             match converted {
                 Ok(result) => Ok(heap.values.add(Value::Number(result))),
                 Err(_) => Err(format!(
                     "'number' could not convert string '{}' to a number.",
-                    prompt
+                    string
                 )),
             }
         }
@@ -94,13 +94,13 @@ fn setattr_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String>
         } else {
             Err(format!(
                 "`setattr` only works on instances, got `{}`",
-                **args[0]
+                heap.values[args[0]]
             ))
         }
     } else {
         Err(format!(
             "`setattr` can only index with string indexes, got: `{}` (instance: `{}`)",
-            **args[1], **args[0]
+            heap.values[args[1]], heap.values[args[0]]
         ))
     }
 }
@@ -132,13 +132,13 @@ fn delattr_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String>
         } else {
             Err(format!(
                 "`delattr` only works on instances, got `{}`",
-                **args[0]
+                heap.values[args[0]]
             ))
         }
     } else {
         Err(format!(
             "`delattr` can only index with string indexes, got: `{}` (instance: `{}`)",
-            **args[1], **args[0]
+            heap.values[args[1]], heap.values[args[0]]
         ))
     }
 }
