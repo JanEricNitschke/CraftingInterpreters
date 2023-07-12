@@ -1,6 +1,7 @@
 use crate::{
     chunk::{CodeOffset, OpCode},
     types::Line,
+    scanner::{Token, TokenKind},
     value::Value,
 };
 
@@ -43,7 +44,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
         T: Into<Value>,
     {
         let line = self.line();
-        let value_id = self.heap.values.add(value.into());
+        let value_id = self.heap.add_value(value.into());
         if !self.current_chunk().write_constant(value_id, line) {
             self.error("Too many constants in one chunk.");
         }
@@ -98,6 +99,19 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
             true
         } else {
             false
+        }
+    }
+
+    pub(super) fn synthetic_token(&self, kind: TokenKind) -> Token<'scanner> {
+        Token {
+            kind,
+            lexeme: match kind {
+                TokenKind::Super => "super",
+                TokenKind::This => "this",
+                _ => unimplemented!(),
+            }
+            .as_bytes(),
+            line: self.line(),
         }
     }
 }

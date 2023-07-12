@@ -107,7 +107,7 @@ pub(super) fn make_rules<'scanner, 'arena>() -> Rules<'scanner, 'arena> {
         Print        = [None,     None,   None      ],
         Return       = [None,     None,   None      ],
         Switch       = [None,     None,   None      ],
-        Super        = [None,     None,   None      ],
+        Super        = [super_,    None,   None      ],
         This         = [this,     None,   None      ],
         True         = [literal,  None,   None      ],
         Var          = [None,     None,   None      ],
@@ -268,5 +268,41 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
             return;
         }
         self.variable(false);
+    }
+
+    fn super_(&mut self, _can_assign: bool) {
+        match self.current_class() {
+            None => {
+                self.error("Can't use 'super' outside of a class.");
+            }
+            Some(class) if !class.has_superclass => {
+                self.error("Can't user super in a class with no superclass.");
+            }
+            _ => {}
+        }
+        self.consume(TK::Dot, "Expect '.' after 'super.");
+        self.consume(TK::Identifier, "Expect superclass method name.");
+        let name = self.identifier_constant(self.previous.as_ref().unwrap().as_str().to_string());
+
+        let line = self.line();
+
+        self.named_variable(self.synthetic_token(TK::This).as_str(), false);
+        if self.match_(TK::LeftParen) {
+            let arg_count = self.argument_list();
+            self.named_variable(self.synthetic_token(TK::Super).as_str()     ,false);
+            self.emit_byte(OpCode::SuperInvoke, line);
+            if !self.emit_number(*name, false) {
+                self.error("Too many constants while compiling OP_SUPER_INVOKE");
+            }
+            self.emit_byte(arg_count, line)
+        } else {
+            self.named_variable(self.synthetic_token(TK::Super).as_str(), false);
+            self.emit_byte(OpCode::GetSuper, self.line());
+            if !self.emit_number(*name, false) {
+                self.error("Too many constants while compiling OP_SUPER_INVOKE");
+            }
+        }
+
+
     }
 }

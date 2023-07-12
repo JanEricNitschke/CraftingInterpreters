@@ -2,7 +2,7 @@ use super::{rules::Precedence, ClassState, Compiler, FunctionType, LoopState};
 
 use crate::{
     chunk::{CodeOffset, ConstantIndex, OpCode},
-    scanner::{TokenKind as TK, Token},
+    scanner::TokenKind as TK,
     types::Line,
 };
 
@@ -104,8 +104,8 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
         let nested_upvalues = nested_state.upvalues;
 
         self.emit_byte(OpCode::Closure, line);
-        let function_id = self.heap.functions.add(nested_function);
-        let value_id = self.heap.values.add(function_id.into());
+        let function_id = self.heap.add_function(nested_function);
+        let value_id = self.heap.add_value(function_id.into());
         let value_id_byte = u8::try_from(self.current_chunk().make_constant(value_id).0).unwrap();
         self.emit_byte(value_id_byte, line);
 
@@ -160,9 +160,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
         }
 
         self.begin_scope();
-        self.add_local(Token {
-            kind: TK::Super, lexeme: "super".as_bytes(), line: self.line()
-        }, true);
+        self.add_local(self.synthetic_token(TK::Super), false);
         self.define_variable(None, true);
 
         self.named_variable(class_name, false);

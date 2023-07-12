@@ -11,7 +11,7 @@ use crate::{
 };
 
 fn clock_native(heap: &mut Heap, _args: &[&ValueId]) -> Result<ValueId, String> {
-    Ok(heap.values.add(Value::Number(
+    Ok(heap.add_value(Value::Number(
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -21,7 +21,7 @@ fn clock_native(heap: &mut Heap, _args: &[&ValueId]) -> Result<ValueId, String> 
 
 fn sqrt_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     match &heap.values[args[0]] {
-        Value::Number(n) => Ok(heap.values.add(n.sqrt().into())),
+        Value::Number(n) => Ok(heap.add_value(n.sqrt().into())),
         x => Err(format!("'sqrt' expected numeric argument, got: {}", *x)),
     }
 }
@@ -33,8 +33,8 @@ fn input_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
             let mut choice = String::new();
             match io::stdin().read_line(&mut choice) {
                 Ok(_) => {
-                    let string = Value::String(heap.strings.add(choice.trim().to_string()));
-                    Ok(heap.values.add(string))
+                    let string = Value::String(heap.add_string(choice.trim().to_string()));
+                    Ok(heap.add_value(string))
                 }
                 Err(e) => Err(format!("'input' could not read line: {}", e)),
             }
@@ -49,15 +49,15 @@ fn to_number_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, Strin
             let string = &heap.strings[string_id];
             let converted: Result<f64, _> = string.parse();
             match converted {
-                Ok(result) => Ok(heap.values.add(Value::Number(result))),
+                Ok(result) => Ok(heap.add_value(Value::Number(result))),
                 Err(_) => Err(format!(
                     "'number' could not convert string '{}' to a number.",
                     string
                 )),
             }
         }
-        value @ Value::Number(_) => Ok(heap.values.add(value.clone())),
-        Value::Bool(value) => Ok(heap.values.add(Value::Number(f64::from(*value)))),
+        value @ Value::Number(_) => Ok(heap.add_value(value.clone())),
+        Value::Bool(value) => Ok(heap.add_value(Value::Number(f64::from(*value)))),
         x => Err(format!(
             "'number' expected string, number or bool argument, got: {}",
             x
@@ -159,7 +159,7 @@ impl NativeFunctions {
         for name in [
             "clock", "sqrt", "input", "number", "getattr", "setattr", "hasattr", "delattr",
         ] {
-            let string_id = heap.strings.add(name.to_string());
+            let string_id = heap.add_string(name.to_string());
             self.string_ids.insert(name.to_string(), string_id);
         }
     }

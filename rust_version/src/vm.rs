@@ -159,9 +159,9 @@ impl VM {
         let result = if let Some(function) = compiler.compile() {
             native_functions.define_functions(self);
 
-            let function_id = self.heap.functions.add(function);
+            let function_id = self.heap.add_function(function);
             let closure = Value::closure(function_id);
-            let value_id = self.heap.values.add(closure);
+            let value_id = self.heap.add_value(closure);
             self.stack_push(value_id);
             self.execute_call(value_id, 0);
             self.run()
@@ -295,7 +295,7 @@ impl VM {
                                 .push((*self.callstack.closure()).as_closure().upvalues[index]);
                         }
                     }
-                    let closure_id = self.heap.values.add(Value::from(closure));
+                    let closure_id = self.heap.add_value(Value::from(closure));
                     self.stack_push(closure_id);
                 }
                 OpCode::GetUpvalue => {
@@ -336,23 +336,12 @@ impl VM {
                     self.stack.pop();
                 }
                 OpCode::Class => {
-                    let constant = self.read_constant(false);
-                    let class = match &self.heap.values[&constant] {
-                        Value::String(string_id) => Class::new(*string_id),
-                        x => {
-                            panic!("Non-string operand to OP_CLASS: `{}`", x);
-                        }
-                    };
+                    let class_name = self.read_string("OP_CLASS");
+                    let class = Class::new(class_name);
                     self.stack_push_value(class.into());
                 }
                 OpCode::GetProperty => {
-                    let constant = self.read_constant(false);
-                    let field = match &self.heap.values[&constant] {
-                        Value::String(string_id) => *string_id,
-                        x => {
-                            panic!("Non-string property name to GET_PROPERTY: `{}`", x);
-                        }
-                    };
+                    let field = self.read_string("GET_PROPERTY");
 
                     let instance = match &self.heap.values
                         [self.peek(0).expect("Stack underflow in GET_PROPERTY")]
@@ -380,13 +369,7 @@ impl VM {
                     }
                 }
                 OpCode::SetProperty => {
-                    let constant = self.read_constant(false);
-                    let field_string_id = match &self.heap.values[&constant] {
-                        Value::String(string_id) => *string_id,
-                        x => {
-                            panic!("Non-string property name to SET_PROPERTY: `{}`", x);
-                        }
-                    };
+                    let field_string_id = self.read_string("SET_PROPERTY");
                     let field = &self.heap.strings[&field_string_id];
                     match &self.heap.values[self.peek(1).expect("Stack underflow in SET_PROPERTY")]
                     {
@@ -410,38 +393,42 @@ impl VM {
                     self.stack_push(value);
                 }
                 OpCode::Method => {
-                    let constant = self.read_constant(false);
-                    let method_name = match &self.heap.values[&constant] {
-                        Value::String(string_id) => *string_id,
-                        x => {
-                            panic!("Non-string method name to OP_METHOD: `{}`", x);
-                        }
-                    };
+                    let method_name = self.read_string("OP_METHOD");
                     self.define_method(method_name);
                 }
                 OpCode::Invoke => {
-                    let constant = self.read_constant(false);
-                    let method_name = match &self.heap.values[&constant] {
-                        Value::String(string_id) => *string_id,
-                        x => {
-                            panic!("Non-string method name to OP_INVOKE: `{}`", x);
-                        }
-                    };
+                    let method_name = self.read_string("OP_INVOKE");
                     let arg_count = self.read_byte();
                     if !self.invoke(method_name, arg_count) {
                         return InterpretResult::RuntimeError;
                     }
                 }
                 OpCode::Inherit => {
-                    let superclass = self.peek(1).expect("Stack underflow in OP_INHERIT").as_class();
-                    let methods = superclass.methods.clone();
-                    let subclass = self.stack.pop().expect("Stack underflow in OP_INHERIT");
-                    match &mut self.heap.values[&subclass] {
-                        Value::Class(subclass) => {subclass.methods.extend(methods);},
+                    let superclass_id = self.peek(1).expect("Stack underflow in OP_INHERIT");
+                    let superclass = match &self.heap.values[superclass_id] {
+                        Value::Class(superclass) => {superclass}
                         _ => {
                             runtime_error!(self, "Superclass must be a class.");
                             return InterpretResult::RuntimeError;
                         }
+                    };
+                    let methods = superclass.methods.clone();
+                    let mut subclass = self.stack.pop().expect("Stack underflow in OP_INHERIT");
+                    subclass.as_class_mut().methods.extend(methods);
+                }
+                OpCode::GetSuper => {
+                    let method_name = self.read_string("OP_GET_SUPER");
+                    let superclass = self.stack.pop().expect("Stack underflow in OP_GET_SUPER");
+                    if !self.bind_method(superclass, method_name) {
+                        return InterpretResult::RuntimeError
+                    }
+                }
+                OpCode::SuperInvoke => {
+                    let method_name = self.read_string("OP_SUPER_INVOKE");
+                    let arg_count = self.read_byte();
+                    let superclass = self.stack.pop().expect("Stack underflow in OP_SUPER_INVOKE");
+                    if !self.invoke_from_class(superclass, method_name, arg_count) {
+                        return InterpretResult::RuntimeError;
                     }
                 }
             };
@@ -463,6 +450,16 @@ impl VM {
             None
         } else {
             Some(&mut self.stack[len - n - 1])
+        }
+    }
+
+    fn read_string(&mut self, opcode_name: &str) -> StringId {
+        let constant = self.read_constant(false);
+        match &self.heap.values[&constant] {
+            Value::String(string_id) => *string_id,
+            x => {
+                panic!("Non-string method name to {opcode_name}: `{x}`");
+            }
         }
     }
 
@@ -681,7 +678,7 @@ impl VM {
                 (Value::String(a), Value::String(b)) => {
                     // This could be optimized by allowing mutations via the heap
                     let new_string = format!("{}{}", self.heap.strings[a], self.heap.strings[b]);
-                    let new_string_id = self.heap.strings.add(new_string);
+                    let new_string_id = self.heap.add_string(new_string);
                     self.stack.pop();
                     self.stack.pop();
                     self.stack_push_value(new_string_id.into());
@@ -762,8 +759,8 @@ impl VM {
                 .heap
                 .builtin_constants()
                 .number(n)
-                .unwrap_or_else(|| self.heap.values.add(value)),
-            value => self.heap.values.add(value),
+                .unwrap_or_else(|| self.heap.add_value(value)),
+            value => self.heap.add_value(value),
         };
         self.stack.push(value_id);
     }
@@ -790,7 +787,7 @@ impl VM {
                     .methods
                     .get(&self.heap.builtin_constants().init_string)
                     .cloned();
-                let instance_id: ValueId = self.heap.values.add(Instance::new(callee).into());
+                let instance_id: ValueId = self.heap.add_value(Instance::new(callee).into());
                 //Replace the class with the instance on the stack
                 let stack_index = self.stack.len() - usize::from(arg_count) - 1;
                 self.stack[stack_index] = instance_id;
@@ -909,7 +906,7 @@ impl VM {
         }
 
         let upvalue = Value::Upvalue(Upvalue::Open(local));
-        let upvalue_id = self.heap.values.add(upvalue);
+        let upvalue_id = self.heap.add_value(upvalue);
         self.open_upvalues.insert(upvalue_index, upvalue_id);
 
         upvalue_id
@@ -972,7 +969,7 @@ impl VM {
             arity,
             fun,
         });
-        let value_id = self.heap.values.add(value);
+        let value_id = self.heap.add_value(value);
         self.globals.insert(
             name,
             Global {
@@ -992,18 +989,17 @@ impl VM {
 
         // Mark roots
         for value in &self.stack {
-            self.heap.values.mark(value, black_value);
+            self.heap.mark_value(value);
         }
         for value in self.globals.values() {
-            self.heap.values.mark(&value.value, black_value);
+            self.heap.mark_value(&value.value);
         }
         for frame in self.callstack.iter() {
-            self.heap
-                .functions
-                .mark(&frame.closure().function, black_value);
+            self.heap.
+                mark_function(&frame.closure().function);
         }
         for upvalue in &self.open_upvalues {
-            self.heap.values.mark(upvalue, black_value);
+            self.heap.mark_value(upvalue);
         }
 
         // Trace references
