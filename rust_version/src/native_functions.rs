@@ -1,7 +1,7 @@
 use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use hashbrown::HashMap;
+use rustc_hash::FxHashMap as HashMap;
 
 use crate::{
     compiler::Compiler,
@@ -151,7 +151,7 @@ impl NativeFunctions {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            string_ids: HashMap::new(),
+            string_ids: HashMap::default(),
         }
     }
 

@@ -1,10 +1,10 @@
 use std::collections::VecDeque;
 use std::pin::Pin;
 
-use hashbrown::HashMap;
+use rustc_hash::FxHashMap as HashMap;
 
 use crate::chunk::InstructionDisassembler;
-use crate::heap::{ValueId, FunctionId};
+use crate::heap::{FunctionId, ValueId};
 use crate::native_functions::NativeFunctions;
 use crate::value::{Class, Closure, Instance, Upvalue};
 use crate::{
@@ -64,7 +64,7 @@ impl CallFrame {
 struct CallStack {
     frames: Vec<CallFrame>,
     current_closure: Option<ValueId>,
-    current_function: Option<FunctionId>
+    current_function: Option<FunctionId>,
 }
 
 impl CallStack {
@@ -73,7 +73,7 @@ impl CallStack {
         Self {
             frames: Vec::with_capacity(crate::config::FRAMES_MAX),
             current_closure: None,
-            current_function: None
+            current_function: None,
         }
     }
 
@@ -94,7 +94,9 @@ impl CallStack {
 
     fn push(&mut self, closure: ValueId, stack_base: usize) {
         self.frames.push(CallFrame {
-            closure, ip: 0, stack_base
+            closure,
+            ip: 0,
+            stack_base,
         });
         self.current_closure = Some(closure);
         self.current_function = Some(closure.as_closure().function);
@@ -142,7 +144,7 @@ impl VM {
             heap: Heap::new(),
             callstack: CallStack::new(),
             stack: Vec::with_capacity(crate::config::STACK_MAX),
-            globals: HashMap::new(),
+            globals: HashMap::default(),
             open_upvalues: VecDeque::new(),
         }
     }
@@ -192,9 +194,7 @@ impl VM {
                 print!("{:?}", disassembler);
             }
             self.collect_garbage(stress_gc);
-            match OpCode::try_from(self.read_byte())
-                .expect("Internal error: unrecognized opcode")
-            {
+            match OpCode::try_from(self.read_byte()).expect("Internal error: unrecognized opcode") {
                 OpCode::Print => {
                     println!(
                         "{}",
@@ -265,13 +265,11 @@ impl VM {
                 OpCode::Greater => binary_op!(self, >),
                 OpCode::Less => binary_op!(self, <),
                 OpCode::Jump => {
-                    let offset =
-                        self.read_16bit_number();
+                    let offset = self.read_16bit_number();
                     self.callstack.current_mut().ip += offset;
                 }
                 OpCode::Loop => {
-                    let offset =
-                        self.read_16bit_number();
+                    let offset = self.read_16bit_number();
                     self.callstack.current_mut().ip -= offset;
                 }
                 OpCode::Closure => {
@@ -288,8 +286,7 @@ impl VM {
                         );
                         let is_local = is_local == 1;
 
-                        let index =
-                        usize::from(self.read_byte());
+                        let index = usize::from(self.read_byte());
                         if is_local {
                             closure.upvalues.push(self.capture_upvalue(index));
                         } else {
@@ -302,13 +299,10 @@ impl VM {
                     self.stack_push(closure_id);
                 }
                 OpCode::GetUpvalue => {
-                    let upvalue_index =
-                    usize::from(self.read_byte());
+                    let upvalue_index = usize::from(self.read_byte());
                     let closure_value = &*self.callstack.closure();
                     let closure = closure_value.as_closure();
-                    let upvalue_location = closure.upvalues
-                        [upvalue_index]
-                        .upvalue_location();
+                    let upvalue_location = closure.upvalues[upvalue_index].upvalue_location();
                     match *upvalue_location {
                         Upvalue::Open(absolute_local_index) => {
                             self.stack_push(self.stack[absolute_local_index]);
@@ -317,8 +311,7 @@ impl VM {
                     }
                 }
                 OpCode::SetUpvalue => {
-                    let upvalue_index =
-                    usize::from(self.read_byte());
+                    let upvalue_index = usize::from(self.read_byte());
                     let upvalue_location = (*self.callstack.closure()).as_closure().upvalues
                         [upvalue_index]
                         .upvalue_location()
@@ -753,8 +746,12 @@ impl VM {
         let value_id = match value {
             Value::Bool(bool) => self.heap.builtin_constants().bool(bool),
             Value::Nil => self.heap.builtin_constants().nil,
-            Value::Number(n) => self.heap.builtin_constants().number(n).unwrap_or_else(|| self.heap.values.add(value)),
-            value => self.heap.values.add(value)
+            Value::Number(n) => self
+                .heap
+                .builtin_constants()
+                .number(n)
+                .unwrap_or_else(|| self.heap.values.add(value)),
+            value => self.heap.values.add(value),
         };
         self.stack.push(value_id);
     }
@@ -952,10 +949,8 @@ impl VM {
             *closure
         );
 
-        self.callstack.push(
-            closure,
-            self.stack.len() - arg_count - 1,
-        );
+        self.callstack
+            .push(closure, self.stack.len() - arg_count - 1);
         true
     }
 
