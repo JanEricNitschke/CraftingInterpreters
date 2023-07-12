@@ -154,14 +154,14 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
                 self.error("A class can't inherit from itself.");
             }
 
+            self.begin_scope();
+            self.add_local(self.synthetic_token(TK::Super), false);
+            self.define_variable(None, true);
+
             self.named_variable(&class_name, false);
             self.emit_byte(OpCode::Inherit, self.line());
             self.current_class_mut().unwrap().has_superclass = true;
         }
-
-        self.begin_scope();
-        self.add_local(self.synthetic_token(TK::Super), false);
-        self.define_variable(None, true);
 
         self.named_variable(class_name, false);
         self.consume(TK::LeftBrace, "Expect '{' before class body.");

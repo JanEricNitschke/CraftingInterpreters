@@ -276,11 +276,11 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
                 self.error("Can't use 'super' outside of a class.");
             }
             Some(class) if !class.has_superclass => {
-                self.error("Can't user super in a class with no superclass.");
+                self.error("Can't use 'super' in a class with no superclass.");
             }
             _ => {}
         }
-        self.consume(TK::Dot, "Expect '.' after 'super.");
+        self.consume(TK::Dot, "Expect '.' after 'super'.");
         self.consume(TK::Identifier, "Expect superclass method name.");
         let name = self.identifier_constant(self.previous.as_ref().unwrap().as_str().to_string());
 

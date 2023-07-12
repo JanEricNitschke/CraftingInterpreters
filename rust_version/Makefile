@@ -15,12 +15,12 @@ cargo-test:
 craftinginterpreters-test:
 		cd  $(CRAFTING_INTERPRETERS) && \
 		dart tool/bin/test.dart  $(test_level) --interpreter ../../rust_version/$(DEBUG_BIN) \
-		# && dart tool/bin/test.dart  $(test_level) --interpreter ../../rust_version/$(DEBUG_BIN) --arguments --stress-gc
+		&& dart tool/bin/test.dart  $(test_level) --interpreter ../../rust_version/$(DEBUG_BIN) --arguments --stress-gc
 
 .PHONY: custom-dart-test
 custom-dart-test: $(DEBUG_BIN)
 	dart $(CRAFTING_INTERPRETERS)/tool/bin/test.dart clox --interpreter ./$(DEBUG_BIN) \
-	# && dart $(CRAFTING_INTERPRETERS)/tool/bin/test.dart clox --interpreter ./$(DEBUG_BIN) --arguments --stress-gc
+	&& dart $(CRAFTING_INTERPRETERS)/tool/bin/test.dart clox --interpreter ./$(DEBUG_BIN) --arguments --stress-gc
 
 .PHONY: test
 test: cargo-test craftinginterpreters-test custom-dart-test
