@@ -2,7 +2,7 @@ use super::{rules::Precedence, ClassState, Compiler, FunctionType, LoopState};
 
 use crate::{
     chunk::{CodeOffset, ConstantIndex, OpCode},
-    scanner::TokenKind as TK,
+    scanner::{TokenKind as TK, Token},
     types::Line,
 };
 
@@ -156,7 +156,14 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
 
             self.named_variable(&class_name, false);
             self.emit_byte(OpCode::Inherit, self.line());
+            self.current_class_mut().unwrap().has_superclass = true;
         }
+
+        self.begin_scope();
+        self.add_local(Token {
+            kind: TK::Super, lexeme: "super".as_bytes(), line: self.line()
+        }, true);
+        self.define_variable(None, true);
 
         self.named_variable(class_name, false);
         self.consume(TK::LeftBrace, "Expect '{' before class body.");
@@ -165,6 +172,11 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
         }
         self.consume(TK::RightBrace, "Expect '}' after class body.");
         self.emit_byte(OpCode::Pop, self.line());
+
+        if self.current_class().unwrap().has_superclass {
+            self.end_scope();
+        }
+
         self.class_state.pop();
     }
 
