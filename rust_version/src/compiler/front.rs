@@ -144,8 +144,19 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
             self.line(),
         );
         self.define_variable(Some(name_constant), true);
-
         self.class_state.push(ClassState::new());
+
+        if self.match_(TK::Less) {
+            self.consume(TK::Identifier, "Expect superclass name.");
+            self.variable(false);
+
+            if class_name == self.previous.as_ref().unwrap().as_str() {
+                self.error("A class can't inherit from itself.");
+            }
+
+            self.named_variable(&class_name, false);
+            self.emit_byte(OpCode::Inherit, self.line());
+        }
 
         self.named_variable(class_name, false);
         self.consume(TK::LeftBrace, "Expect '{' before class body.");

@@ -91,6 +91,7 @@ pub enum OpCode {
     GetProperty,
     Method,
     Invoke,
+    Inherit,
 }
 
 impl OpCode {
@@ -224,7 +225,7 @@ impl<'chunk> InstructionDisassembler<'chunk> {
         std::mem::size_of::<OpCode>()
             + match opcode {
                 Negate | Add | Subtract | Multiply | Divide | Nil | True | False | Not | Equal
-                | Greater | Less | Print | Pop | Dup | CloseUpvalue => 0,
+                | Greater | Less | Print | Pop | Dup | CloseUpvalue | Inherit => 0,
                 Constant | GetLocal | SetLocal | GetGlobal | SetGlobal | DefineGlobal
                 | DefineGlobalConst | Call | Return | GetUpvalue | SetUpvalue | Class
                 | GetProperty | SetProperty | Method => 1,
@@ -458,23 +459,24 @@ impl<'chunk> std::fmt::Debug for InstructionDisassembler<'chunk> {
             jump(Jump, JumpIfFalse, Loop),
             invoke(Invoke),
             simple(
-                Nil,
-                True,
-                False,
-                Negate,
-                Pop,
-                Equal,
-                Greater,
-                Less,
                 Add,
-                Subtract,
-                Multiply,
+                CloseUpvalue,
                 Divide,
+                Dup,
+                Equal,
+                False,
+                Greater,
+                Inherit,
+                Less,
+                Multiply,
+                Negate,
+                Nil,
                 Not,
+                Pop,
                 Print,
                 Return,
-                Dup,
-                CloseUpvalue
+                Subtract,
+                True,
             ),
         )?;
         Ok(())

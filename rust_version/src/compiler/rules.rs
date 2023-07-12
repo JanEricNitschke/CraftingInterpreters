@@ -243,13 +243,6 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         self.emit_constant(string_id);
     }
 
-    fn variable(&mut self, can_assign: bool) {
-        self.named_variable(
-            self.previous.as_ref().unwrap().as_str().to_string(),
-            can_assign,
-        );
-    }
-
     fn and(&mut self, _can_assign: bool) {
         let end_jump = self.emit_jump(OpCode::JumpIfFalse);
         self.emit_byte(OpCode::Pop, self.line());

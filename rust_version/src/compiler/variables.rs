@@ -40,6 +40,13 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         }
     }
 
+    pub(super) fn variable(&mut self, can_assign: bool) {
+        self.named_variable(
+            self.previous.as_ref().unwrap().as_str().to_string(),
+            can_assign,
+        );
+    }
+
     pub(super) fn named_variable<S>(&mut self, name: S, can_assign: bool)
     where
         S: ToString,
