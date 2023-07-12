@@ -1,7 +1,7 @@
 use crate::{
     chunk::{CodeOffset, OpCode},
-    types::Line,
     scanner::{Token, TokenKind},
+    types::Line,
     value::Value,
 };
 

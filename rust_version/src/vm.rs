@@ -406,7 +406,7 @@ impl VM {
                 OpCode::Inherit => {
                     let superclass_id = self.peek(1).expect("Stack underflow in OP_INHERIT");
                     let superclass = match &self.heap.values[superclass_id] {
-                        Value::Class(superclass) => {superclass}
+                        Value::Class(superclass) => superclass,
                         _ => {
                             runtime_error!(self, "Superclass must be a class.");
                             return InterpretResult::RuntimeError;
@@ -420,13 +420,16 @@ impl VM {
                     let method_name = self.read_string("OP_GET_SUPER");
                     let superclass = self.stack.pop().expect("Stack underflow in OP_GET_SUPER");
                     if !self.bind_method(superclass, method_name) {
-                        return InterpretResult::RuntimeError
+                        return InterpretResult::RuntimeError;
                     }
                 }
                 OpCode::SuperInvoke => {
                     let method_name = self.read_string("OP_SUPER_INVOKE");
                     let arg_count = self.read_byte();
-                    let superclass = self.stack.pop().expect("Stack underflow in OP_SUPER_INVOKE");
+                    let superclass = self
+                        .stack
+                        .pop()
+                        .expect("Stack underflow in OP_SUPER_INVOKE");
                     if !self.invoke_from_class(superclass, method_name, arg_count) {
                         return InterpretResult::RuntimeError;
                     }
@@ -995,8 +998,7 @@ impl VM {
             self.heap.mark_value(&value.value);
         }
         for frame in self.callstack.iter() {
-            self.heap.
-                mark_function(&frame.closure().function);
+            self.heap.mark_function(&frame.closure().function);
         }
         for upvalue in &self.open_upvalues {
             self.heap.mark_value(upvalue);

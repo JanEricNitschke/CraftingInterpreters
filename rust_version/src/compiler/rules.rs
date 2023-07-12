@@ -289,7 +289,7 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         self.named_variable(self.synthetic_token(TK::This).as_str(), false);
         if self.match_(TK::LeftParen) {
             let arg_count = self.argument_list();
-            self.named_variable(self.synthetic_token(TK::Super).as_str()     ,false);
+            self.named_variable(self.synthetic_token(TK::Super).as_str(), false);
             self.emit_byte(OpCode::SuperInvoke, line);
             if !self.emit_number(*name, false) {
                 self.error("Too many constants while compiling OP_SUPER_INVOKE");
@@ -302,7 +302,5 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
                 self.error("Too many constants while compiling OP_SUPER_INVOKE");
             }
         }
-
-
     }
 }
