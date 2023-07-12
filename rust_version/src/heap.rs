@@ -67,7 +67,6 @@ pub struct Arena<V: ArenaValue> {
     name: &'static str,
     log_gc: bool,
 
-    bytes_allocated: usize,
     data: SlotMap<DefaultKey, Item<V>>,
 
     gray: Vec<DefaultKey>,
@@ -79,7 +78,7 @@ impl<V: ArenaValue> Arena<V> {
         Self {
             name,
             log_gc,
-            bytes_allocated: 0,
+
             data: SlotMap::new(),
             gray: Vec::new(),
         }
@@ -98,7 +97,6 @@ impl<V: ArenaValue> Arena<V> {
             );
         }
 
-        self.bytes_allocated += std::mem::size_of::<V>();
 
         ArenaId {
             id,
@@ -111,11 +109,12 @@ impl<V: ArenaValue> Arena<V> {
     }
 
     fn set_marked(&mut self, index: DefaultKey, marked: bool) {
-        self.data.get_mut(index).unwrap().marked = marked;
+        self.data[index].marked = marked;
     }
 
     fn flush_gray(&mut self) -> Vec<DefaultKey> {
-        std::mem::take(&mut self.gray)
+        let capacity = self.gray.capacity();
+        std::mem::replace(&mut self.gray, Vec::with_capacity(capacity))
     }
 
     pub fn mark(&mut self, index: &ArenaId<V>, black_value: bool) -> bool {
@@ -134,24 +133,19 @@ impl<V: ArenaValue> Arena<V> {
         self.gray.push(index);
         true
     }
+
     fn sweep(&mut self, black_value: bool) {
-        let mut to_remove = vec![];
-        for (key, value) in self.data.iter_mut() {
+        self.data.retain(|key, value| {
             let retain = value.marked == black_value;
             if !retain && self.log_gc {
                 eprintln!("{}/{:?} free {}", self.name, key, value.item);
             }
-            if !retain {
-                self.bytes_allocated -= std::mem::size_of::<V>();
-            }
-            if !retain {
-                to_remove.push(key);
-            }
-        }
+            retain
+        });
+    }
 
-        for key in to_remove {
-            self.data.remove(key);
-        }
+    fn bytes_allocated(&self) -> usize {
+        std::mem::size_of::<V>() * self.data.len()
     }
 }
 
@@ -181,7 +175,7 @@ impl<V: ArenaValue> std::ops::IndexMut<&ArenaId<V>> for Arena<V> {
 
 impl<V: ArenaValue> std::ops::IndexMut<DefaultKey> for Arena<V> {
     fn index_mut(&mut self, index: DefaultKey) -> &mut Self::Output {
-        &mut self.data.get_mut(index).unwrap().item
+        &mut self.data[index].item
     }
 }
 
@@ -252,7 +246,9 @@ impl Heap {
     }
 
     fn bytes_allocated(&self) -> usize {
-        self.values.bytes_allocated + self.strings.bytes_allocated + self.functions.bytes_allocated
+        self.values.bytes_allocated()
+        + self.strings.bytes_allocated()
+        + self.functions.bytes_allocated()
     }
 
     pub fn needs_gc(&self) -> bool {
