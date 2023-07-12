@@ -16,5 +16,6 @@ shrinkwraprs = "0.3.0"
 slotmap      = "1.0.6"
 
 # Uncomment for valgrind profiling
-#[profile.release]
-#opt-level = 1
+# [profile.release]
+# debug = true
+# opt-level = 1

@@ -1,21 +1,21 @@
 class A < B {
     stuff() {
         print "A";
-        super().stuff;
+        super.stuff();
     }
 }
 
 class B < C {
     stuff() {
         print "B";
-        super().stuff;
+        super.stuff();
     }
 }
 
 class C < A {
     stuff() {
         print "C";
-        super().stuff;
+        super.stuff();
     }
 }
 

@@ -213,7 +213,7 @@ impl BuiltinConstants {
     }
 
     pub fn number(&self, n: f64) -> Option<ValueId> {
-        if n.fract() != 0.0 || n.is_nan() || n.is_infinite() || n <= 0.0 {
+        if n.fract() != 0.0 || n.is_nan() || n.is_infinite() || n.signum() < 0.0 {
             None
         } else {
             self.numbers.get(n as usize).copied()
