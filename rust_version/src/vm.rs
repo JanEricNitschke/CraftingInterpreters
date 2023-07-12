@@ -626,9 +626,12 @@ impl VM {
 
     fn negate(&mut self) -> Option<InterpretResult> {
         let value_id = *self.peek(0).expect("stack underflow in OP_NEGATE");
-        let value = &mut self.heap.values[&value_id];
+        let value = &self.heap.values[&value_id];
         match value {
-            Value::Number(n) => *n = -*n,
+            Value::Number(n) =>{
+                self.stack.pop();
+                self.stack_push_value((-*n).into());
+            },
             _ => {
                 runtime_error!(self, "Operand must be a number.");
                 return Some(InterpretResult::RuntimeError);

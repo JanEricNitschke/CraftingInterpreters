@@ -1,20 +1,8 @@
-class Outer {
-  method() {
-    print this; // expect: Outer instance
-
-    fun f() {
-      print this; // expect: Outer instance
-
-      class Inner {
-        method() {
-          print this; // expect: Inner instance
-        }
-      }
-
-      print Inner().method();
-    }
-    f();
-  }
+var i = 0;
+while (i < 10) {
+  print i;
+  i = i + 1;
+  print -i;
+  print i;
+  break;
 }
-
-Outer().method();

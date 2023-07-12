@@ -87,8 +87,8 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
                     if compiler.current_function().arity > 255 {
                         compiler.error_at_current("Can't have more than 255 parameters.");
                     }
-                    let constant = compiler.parse_variable("Expect parameter name.", false);
-                    compiler.define_variable(constant, false);
+                    let constant = compiler.parse_variable("Expect parameter name.", true);
+                    compiler.define_variable(constant, true);
                     if !compiler.match_(TK::Comma) {
                         break;
                     }
@@ -155,15 +155,15 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
             }
 
             self.begin_scope();
-            self.add_local(self.synthetic_token(TK::Super), false);
+            self.add_local(self.synthetic_token(TK::Super), true);
             self.define_variable(None, true);
 
-            self.named_variable(&class_name, false);
+            self.named_variable(&class_name, true);
             self.emit_byte(OpCode::Inherit, self.line());
             self.current_class_mut().unwrap().has_superclass = true;
         }
 
-        self.named_variable(class_name, false);
+        self.named_variable(class_name, true);
         self.consume(TK::LeftBrace, "Expect '{' before class body.");
         while !self.check(TK::RightBrace) && !self.check(TK::Eof) {
             self.method();
@@ -371,16 +371,16 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
         let line = self.line();
 
         // Compile initializer, store loop variable
-        let loop_var_name_const = if self.match_(TK::Semicolon) {
+        let loop_var_name_mutable = if self.match_(TK::Semicolon) {
             // No initializer
             None
         } else if self.match_(TK::Var) || self.match_(TK::Const) {
             let name = self.current.clone().unwrap();
-            let is_const = self.check_previous(TK::Var);
-            self.var_declaration(is_const);
+            let is_mutable = self.check_previous(TK::Var);
+            self.var_declaration(is_mutable);
             // Challenge 25/2: alias loop variables
             if let Ok(loop_var) = u8::try_from(self.locals().len() - 1) {
-                Some((loop_var, name, is_const))
+                Some((loop_var, name, is_mutable))
             } else {
                 self.error("Creating loop variable led to too many locals.");
                 None
@@ -430,10 +430,10 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
 
         // Alias loop variable for this iteration of the loop
         let loop_and_inner_var =
-            if let Some((loop_var, loop_var_name, is_const)) = loop_var_name_const {
+            if let Some((loop_var, loop_var_name, is_mutable)) = loop_var_name_mutable {
                 self.begin_scope();
                 self.emit_bytes(OpCode::GetLocal, loop_var, line);
-                self.add_local(loop_var_name, is_const);
+                self.add_local(loop_var_name, is_mutable);
                 self.mark_initialized();
                 if let Ok(inner_var) = u8::try_from(self.locals().len() - 1) {
                     Some((loop_var, inner_var))
