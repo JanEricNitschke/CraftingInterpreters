@@ -108,7 +108,7 @@ pub(super) fn make_rules<'scanner, 'arena>() -> Rules<'scanner, 'arena> {
         Return       = [None,     None,   None      ],
         Switch       = [None,     None,   None      ],
         Super        = [None,     None,   None      ],
-        This         = [None,     None,   None      ],
+        This         = [this,     None,   None      ],
         True         = [literal,  None,   None      ],
         Var          = [None,     None,   None      ],
         While        = [None,     None,   None      ],
@@ -198,12 +198,21 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         if can_assign && self.match_(TK::Equal) {
             self.expression();
             self.emit_byte(OpCode::SetProperty, line);
+            if !self.emit_number(name_constant.0, false) {
+                self.error("Too many constants created for OP_SET_PROPERTY");
+            }
+        } else if self.match_(TK::LeftParen) {
+            let arg_count = self.argument_list();
+            self.emit_byte(OpCode::Invoke, line);
+            if !self.emit_number(name_constant.0, false) {
+                self.error("Too many constants created for OP_INVOKE");
+            }
+            self.emit_byte(arg_count, line);
         } else {
             self.emit_byte(OpCode::GetProperty, line);
-        }
-
-        if !self.emit_number(name_constant.0, false) {
-            self.error("Too many constants created by property access.");
+            if !self.emit_number(name_constant.0, false) {
+                self.error("Too many constants created for OP_GET_PROPERTY.");
+            }
         }
     }
 
@@ -258,5 +267,13 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
 
         self.parse_precedence(Precedence::Or);
         self.patch_jump(end_jump);
+    }
+
+    fn this(&mut self, _can_assign: bool) {
+        if self.current_class().is_none() {
+            self.error("Can't use 'this' outside of a class.");
+            return;
+        }
+        self.variable(false);
     }
 }

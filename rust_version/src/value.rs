@@ -22,6 +22,7 @@ pub enum Value {
 
     Class(Class),
     Instance(Instance),
+    BoundMethod(BoundMethod),
 }
 
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
@@ -39,11 +40,18 @@ impl Upvalue {
     }
 }
 
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
+#[derive(Debug, PartialOrd, Clone)]
 pub struct Closure {
     pub function: FunctionId,
     pub upvalues: Vec<ValueId>,
     pub upvalue_count: usize,
+}
+
+impl PartialEq for Closure {
+    fn eq(&self, _other: &Self) -> bool {
+        // Two different closures are always considered different, even if they close over exactly the same things
+        false
+    }
 }
 
 impl Closure {
@@ -65,6 +73,10 @@ impl Value {
             upvalues: Vec::with_capacity(upvalue_count),
             upvalue_count,
         })
+    }
+
+    pub fn bound_method(receiver: ValueId, method: ValueId) -> Value {
+        Value::BoundMethod(BoundMethod { receiver, method })
     }
 }
 
@@ -126,6 +138,12 @@ impl std::fmt::Display for Value {
                 "<{} instance>",
                 *(*instance.class).as_class().name
             )),
+            Value::BoundMethod(method) => f.pad(&format!(
+                "<bound method {}.{} of {}>",
+                *method.receiver.as_instance().class.as_class().name,
+                *method.method.as_closure().function.name,
+                *method.receiver
+            )),
         }
     }
 }
@@ -156,10 +174,24 @@ impl Value {
         }
     }
 
+    pub fn as_instance(&self) -> &Instance {
+        match self {
+            Value::Instance(i) => i,
+            _ => unreachable!("Expected Instance, found `{}`", self),
+        }
+    }
+
     pub fn as_instance_mut(&mut self) -> &mut Instance {
         match self {
             Value::Instance(i) => i,
             _ => unreachable!("Expected Instance, found `{}`", self),
+        }
+    }
+
+    pub fn as_class_mut(&mut self) -> &mut Class {
+        match self {
+            Value::Class(c) => c,
+            _ => unreachable!("Expected Class, found `{}`", self),
         }
     }
 
@@ -225,15 +257,21 @@ fn always_equals<T>(_: &T, _: &T) -> bool {
     true
 }
 
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, Clone, Derivative)]
+#[derivative(PartialOrd)]
 pub struct Class {
     pub name: StringId,
+    #[derivative(PartialOrd = "ignore")]
+    pub methods: HashMap<StringId, ValueId>,
 }
 
 impl Class {
     #[must_use]
     pub fn new(name: StringId) -> Self {
-        Class { name }
+        Class {
+            name,
+            methods: HashMap::new(),
+        }
     }
 }
 
@@ -252,5 +290,18 @@ impl Instance {
             class,
             fields: HashMap::new(),
         }
+    }
+}
+
+#[derive(Debug, PartialOrd, Clone)]
+pub struct BoundMethod {
+    pub receiver: ValueId,
+    pub method: ValueId,
+}
+
+impl PartialEq for BoundMethod {
+    fn eq(&self, _other: &Self) -> bool {
+        // Two different bound methods are always considered different
+        false
     }
 }

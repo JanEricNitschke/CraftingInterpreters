@@ -18,10 +18,11 @@ use crate::{
     value::Function,
 };
 
-#[derive(Shrinkwrap, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Default)]
+#[derive(Shrinkwrap, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Default, Debug)]
 #[shrinkwrap(mutable)]
 struct ScopeDepth(i32);
 
+#[derive(Debug)]
 struct Local<'scanner> {
     name: Token<'scanner>,
     depth: ScopeDepth,
@@ -32,6 +33,8 @@ struct Local<'scanner> {
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum FunctionType {
     Function,
+    Initializer,
+    Method,
     Script,
 }
 
@@ -59,7 +62,17 @@ struct NestableState<'scanner> {
     loop_state: Option<LoopState>,
 }
 
+struct ClassState {}
+
+impl ClassState {
+    #[must_use]
+    fn new() -> Self {
+        Self {}
+    }
+}
+
 impl<'scanner> NestableState<'scanner> {
+    #[must_use]
     fn new(function_name: StringId, function_type: FunctionType) -> Self {
         NestableState {
             current_function: Function::new(0, function_name),
@@ -67,7 +80,13 @@ impl<'scanner> NestableState<'scanner> {
             locals: vec![Local {
                 name: Token {
                     kind: TokenKind::Identifier,
-                    lexeme: &[],
+                    lexeme: if function_type == FunctionType::Method
+                        || function_type == FunctionType::Initializer
+                    {
+                        "this".as_bytes()
+                    } else {
+                        &[]
+                    },
                     line: Line(0),
                 },
                 depth: ScopeDepth(0),
@@ -96,15 +115,20 @@ pub struct Compiler<'scanner, 'heap> {
     panic_mode: bool,
 
     nestable_state: Vec<NestableState<'scanner>>,
+    class_state: Vec<ClassState>,
 }
 
-impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
+impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
     #[must_use]
-    pub fn new(scanner: Scanner<'scanner>, arena: &'arena mut Heap) -> Self {
-        let function_name = arena.strings.add(String::from("<script>"));
+    pub fn new(scanner: Scanner<'scanner>, heap: &'heap mut Heap) -> Self {
+        let function_name = heap.strings.add(String::from("<script>"));
+
+        let mut strings_by_name: HashMap<String, StringId> = HashMap::new();
+        let init_string = heap.builtin_constants().init_string;
+        strings_by_name.insert(init_string.to_string(), init_string);
         Compiler {
-            heap: arena,
-            strings_by_name: HashMap::new(),
+            heap,
+            strings_by_name,
             scanner,
             previous: None,
             current: None,
@@ -112,6 +136,7 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
             panic_mode: false,
             rules: make_rules(),
             nestable_state: vec![NestableState::new(function_name, FunctionType::Script)],
+            class_state: vec![],
         }
     }
 
@@ -240,5 +265,9 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         for (key, value) in names {
             self.strings_by_name.insert(key.clone(), *value);
         }
+    }
+
+    fn current_class(&self) -> Option<&ClassState> {
+        self.class_state.last()
     }
 }

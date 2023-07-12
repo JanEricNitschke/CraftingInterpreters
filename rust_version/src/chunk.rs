@@ -89,6 +89,8 @@ pub enum OpCode {
     Class,
     SetProperty,
     GetProperty,
+    Method,
+    Invoke,
 }
 
 impl OpCode {
@@ -225,8 +227,8 @@ impl<'chunk> InstructionDisassembler<'chunk> {
                 | Greater | Less | Print | Pop | Dup | CloseUpvalue => 0,
                 Constant | GetLocal | SetLocal | GetGlobal | SetGlobal | DefineGlobal
                 | DefineGlobalConst | Call | Return | GetUpvalue | SetUpvalue | Class
-                | GetProperty | SetProperty => 1,
-                Jump | JumpIfFalse | Loop => 2,
+                | GetProperty | SetProperty | Method => 1,
+                Jump | JumpIfFalse | Loop | Invoke => 2,
                 ConstantLong
                 | GetGlobalLong
                 | SetGlobalLong
@@ -252,11 +254,10 @@ impl<'chunk> InstructionDisassembler<'chunk> {
         offset: &CodeOffset,
     ) -> std::fmt::Result {
         let constant_index = ConstantIndex(self.chunk.code()[offset.as_ref() + 1]);
+        write!(f, "{:-16} {:>4}", name, *constant_index,)?;
         writeln!(
             f,
-            "{:-16} {:>4} '{}'",
-            name,
-            *constant_index,
+            " '{}'",
             **self.chunk.get_constant(*constant_index.as_ref())
         )
     }
@@ -374,6 +375,22 @@ impl<'chunk> InstructionDisassembler<'chunk> {
 
         Ok(())
     }
+
+    fn debug_invoke_opcode(
+        &self,
+        f: &mut std::fmt::Formatter,
+        name: &str,
+        offset: &CodeOffset,
+    ) -> std::fmt::Result {
+        let code = self.chunk.code();
+        let constant = code[offset.as_ref() + 1];
+        let arg_count = code[offset.as_ref() + 2];
+        let constant_value = &**self.chunk.get_constant(constant);
+        writeln!(
+            f,
+            "{name:-16} ({arg_count} args) {constant:4} {constant_value}"
+        )
+    }
 }
 
 macro_rules! disassemble {
@@ -424,10 +441,9 @@ impl<'chunk> std::fmt::Debug for InstructionDisassembler<'chunk> {
                 DefineGlobalConst,
                 GetGlobal,
                 SetGlobal,
-                GetLocal,
-                SetLocal,
                 GetProperty,
                 SetProperty,
+                Method,
             ),
             constant_long(
                 ConstantLong,
@@ -437,9 +453,10 @@ impl<'chunk> std::fmt::Debug for InstructionDisassembler<'chunk> {
                 SetGlobalLong,
             ),
             closure(Closure),
-            byte(Call, GetUpvalue, SetUpvalue, Class),
+            byte(Call, GetUpvalue, SetUpvalue, Class, GetLocal, SetLocal,),
             byte_long(GetLocalLong, SetLocalLong),
             jump(Jump, JumpIfFalse, Loop),
+            invoke(Invoke),
             simple(
                 Nil,
                 True,

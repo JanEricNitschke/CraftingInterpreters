@@ -5,7 +5,7 @@ use std::{
 };
 
 use derivative::Derivative;
-use hashbrown::HashMap;
+use slotmap::{DefaultKey, HopSlotMap as SlotMap};
 use std::fmt::{Debug, Display};
 
 use crate::value::{Function, Upvalue, Value};
@@ -16,7 +16,7 @@ impl<T> ArenaValue for T where T: Debug + Display + PartialEq {}
 #[derive(Clone, Debug, PartialOrd, Derivative)]
 #[derivative(Hash, PartialEq, Eq)]
 pub struct ArenaId<T: ArenaValue> {
-    id: usize,
+    id: DefaultKey,
     #[derivative(Hash = "ignore")]
     arena: NonNull<Arena<T>>, // Yes this is terrible, yes I'm OK with it for this project
 }
@@ -62,16 +62,15 @@ pub type ValueId = ArenaId<Value>;
 pub type StringId = ArenaId<String>;
 pub type FunctionId = ArenaId<Function>;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Arena<V: ArenaValue> {
     name: &'static str,
     log_gc: bool,
 
     bytes_allocated: usize,
-    data: HashMap<usize, Item<V>>,
-    free_keys: Vec<usize>,
+    data: SlotMap<DefaultKey, Item<V>>,
 
-    gray: Vec<usize>,
+    gray: Vec<DefaultKey>,
 }
 
 impl<V: ArenaValue> Arena<V> {
@@ -81,24 +80,21 @@ impl<V: ArenaValue> Arena<V> {
             name,
             log_gc,
             bytes_allocated: 0,
-            data: HashMap::new(),
-            free_keys: Vec::new(),
+            data: SlotMap::new(),
             gray: Vec::new(),
         }
     }
 
     pub fn add(&mut self, value: V) -> ArenaId<V> {
-        let id = self.free_keys.pop().unwrap_or_else(|| self.data.len());
-        let old = self.data.insert(id, value.into());
-        debug_assert_eq!(None, old);
+        let id = self.data.insert(value.into());
 
         if self.log_gc {
             eprintln!(
-                "{}/{} allocate {} for {}",
+                "{}/{:?} allocate {} for {}",
                 self.name,
                 id,
                 humansize::format_size(std::mem::size_of::<V>(), humansize::BINARY),
-                self.data[&id].item
+                self.data[id].item
             );
         }
 
@@ -110,15 +106,15 @@ impl<V: ArenaValue> Arena<V> {
         }
     }
 
-    fn is_marked(&self, index: usize, black_value: bool) -> bool {
-        self.data[&index].marked == black_value
+    fn is_marked(&self, index: DefaultKey, black_value: bool) -> bool {
+        self.data[index].marked == black_value
     }
 
-    fn set_marked(&mut self, index: usize, marked: bool) {
-        self.data.get_mut(&index).unwrap().marked = marked;
+    fn set_marked(&mut self, index: DefaultKey, marked: bool) {
+        self.data.get_mut(index).unwrap().marked = marked;
     }
 
-    fn flush_gray(&mut self) -> Vec<usize> {
+    fn flush_gray(&mut self) -> Vec<DefaultKey> {
         std::mem::take(&mut self.gray)
     }
 
@@ -127,35 +123,34 @@ impl<V: ArenaValue> Arena<V> {
         self.mark_raw(index.id, black_value)
     }
 
-    fn mark_raw(&mut self, index: usize, black_value: bool) -> bool {
+    fn mark_raw(&mut self, index: DefaultKey, black_value: bool) -> bool {
         if self.is_marked(index, black_value) {
             return false;
         }
         if self.log_gc {
-            eprintln!("{}/{} mark {}", self.name, index, self[index]);
+            eprintln!("{}/{:?} mark {}", self.name, index, self[index]);
         }
         self.set_marked(index, black_value);
         self.gray.push(index);
         true
     }
-
     fn sweep(&mut self, black_value: bool) {
         let mut to_remove = vec![];
         for (key, value) in self.data.iter_mut() {
             let retain = value.marked == black_value;
             if !retain && self.log_gc {
-                eprintln!("{}/{} free {}", self.name, key, value.item);
+                eprintln!("{}/{:?} free {}", self.name, key, value.item);
             }
             if !retain {
                 self.bytes_allocated -= std::mem::size_of::<V>();
             }
             if !retain {
-                to_remove.push(*key);
+                to_remove.push(key);
             }
         }
+
         for key in to_remove {
-            self.data.remove(&key);
-            self.free_keys.push(key);
+            self.data.remove(key);
         }
     }
 }
@@ -169,11 +164,11 @@ impl<V: ArenaValue> std::ops::Index<&ArenaId<V>> for Arena<V> {
     }
 }
 
-impl<V: ArenaValue> std::ops::Index<usize> for Arena<V> {
+impl<V: ArenaValue> std::ops::Index<DefaultKey> for Arena<V> {
     type Output = V;
 
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.data[&index].item
+    fn index(&self, index: DefaultKey) -> &Self::Output {
+        &self.data[index].item
     }
 }
 
@@ -184,9 +179,9 @@ impl<V: ArenaValue> std::ops::IndexMut<&ArenaId<V>> for Arena<V> {
     }
 }
 
-impl<V: ArenaValue> std::ops::IndexMut<usize> for Arena<V> {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.data.get_mut(&index).unwrap().item
+impl<V: ArenaValue> std::ops::IndexMut<DefaultKey> for Arena<V> {
+    fn index_mut(&mut self, index: DefaultKey) -> &mut Self::Output {
+        &mut self.data.get_mut(index).unwrap().item
     }
 }
 
@@ -195,6 +190,7 @@ pub struct BuiltinConstants {
     pub nil: ValueId,
     pub true_: ValueId,
     pub false_: ValueId,
+    pub init_string: StringId,
 }
 
 impl BuiltinConstants {
@@ -204,6 +200,7 @@ impl BuiltinConstants {
             nil: heap.values.add(Value::Nil),
             true_: heap.values.add(Value::Bool(true)),
             false_: heap.values.add(Value::Bool(false)),
+            init_string: heap.strings.add("init".to_string()),
         }
     }
 
@@ -216,7 +213,7 @@ impl BuiltinConstants {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Heap {
     builtin_constants: Option<BuiltinConstants>,
     pub strings: Arena<String>,
@@ -273,6 +270,10 @@ impl Heap {
             .mark(&self.builtin_constants().true_.clone(), self.black_value);
         self.values
             .mark(&self.builtin_constants().false_.clone(), self.black_value);
+        self.strings.mark(
+            &self.builtin_constants().init_string.clone(),
+            self.black_value,
+        );
     }
 
     pub fn trace(&mut self) {
@@ -295,9 +296,9 @@ impl Heap {
         }
     }
 
-    fn blacken_value(&mut self, index: usize) {
+    fn blacken_value(&mut self, index: DefaultKey) {
         if self.log_gc {
-            eprintln!("Value/{} blacken {}", index, self.values[index]);
+            eprintln!("Value/{:?} blacken {}", index, self.values[index]);
         }
 
         self.values.mark_raw(index, self.black_value);
@@ -316,26 +317,43 @@ impl Heap {
                     .append(&mut closure.upvalues.iter().map(|uv| uv.id).collect());
             }
             Value::Upvalue(Upvalue::Closed(value_id)) => self.values.gray.push(value_id.id),
-            Value::Class(c) => self.strings.gray.push(c.name.id),
+            Value::Class(c) => {
+                self.strings.gray.push(c.name.id);
+                let method_ids = c
+                    .methods
+                    .iter()
+                    .map(|(n, c)| (n.id, c.id))
+                    .collect::<Vec<_>>();
+                for (method_name, closure) in method_ids {
+                    self.strings.gray.push(method_name);
+                    self.values.gray.push(closure);
+                }
+            }
             Value::Instance(instance) => {
                 let mut fields = instance.fields.values().map(|value| value.id).collect();
                 let class_id = instance.class.id;
                 self.values.gray.append(&mut fields);
                 self.values.gray.push(class_id);
             }
+            Value::BoundMethod(bound_method) => {
+                let receiver_id = bound_method.receiver.id;
+                let method_id = bound_method.method.id;
+                self.values.gray.push(receiver_id);
+                self.values.gray.push(method_id);
+            }
         }
     }
 
-    fn blacken_string(&mut self, index: usize) {
+    fn blacken_string(&mut self, index: DefaultKey) {
         if self.log_gc {
-            eprintln!("String/{} blacken {}", index, self.strings[index]);
+            eprintln!("String/{:?} blacken {}", index, self.strings[index]);
         }
         self.strings.mark_raw(index, self.black_value);
     }
 
-    fn blacken_function(&mut self, index: usize) {
+    fn blacken_function(&mut self, index: DefaultKey) {
         if self.log_gc {
-            eprintln!("Function/{} blacken {}", index, self.functions[index]);
+            eprintln!("Function/{:?} blacken {}", index, self.functions[index]);
         }
         let function = &self.functions[index];
         self.strings.gray.push(function.name.id);
