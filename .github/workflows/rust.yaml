@@ -14,13 +14,46 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./rust_version
     steps:
     - name: Checkout repo
       uses: actions/checkout@v3
     - name: Build
+      working-directory: rust_version
       run: cargo build --verbose
     - name: Test
+      working-directory: rust_version
       run: cargo test --verbose
+    - name: Setup dart
+      uses: dart-lang/setup-dart@v1
+      with:
+        sdk: "2.19.0"
+    - name: Checkout book repo
+      uses: actions/checkout@v3
+      with:
+        repository: munificent/craftinginterpreters
+        path: reference/craftinginterpreters
+    - name: Setup book repo
+      working-directory: reference/craftinginterpreters
+      run: |
+        make get
+        make
+    - name: Run custom dart tests
+      working-directory: rust_version
+      run: make test
+    - name: Install hyperfine
+      run: |
+        wget https://github.com/sharkdp/hyperfine/releases/download/v1.16.1/hyperfine_1.16.1_amd64.deb
+        sudo dpkg -i hyperfine_1.16.1_amd64.deb
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: "3.2.2"
+    - name: Run benchmarks
+      working-directory: rust_version
+      run: make benchmark-ci
+
+
