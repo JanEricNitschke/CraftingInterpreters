@@ -1,20 +1,20 @@
 class A < B {
     stuff() {
-        print "A";
+        print("A");
         super.stuff();
     }
 }
 
 class B < C {
     stuff() {
-        print "B";
+        print("B");
         super.stuff();
     }
 }
 
 class C < A {
     stuff() {
-        print "C";
+        print("C");
         super.stuff();
     }
 }

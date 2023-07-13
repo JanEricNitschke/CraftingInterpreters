@@ -8,4 +8,4 @@ fun b(x) {
     return x * 3;
 }
 
-print a(10, 20); // expect: 90
+print(a(10, 20)); // expect: 90

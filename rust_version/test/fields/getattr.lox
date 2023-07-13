@@ -3,10 +3,10 @@ var foo = Foo();
 var field = "bar";
 
 foo.bar = "42";
-print getattr(foo, field); // expect: 42
+print(getattr(foo, field)); // expect: 42
 
 var x = "b";
 x = x + "ar";
-print getattr(foo, field); // expect: 42
+print(getattr(foo, field)); // expect: 42
 
-print getattr(foo, "field"); // expect runtime error: Undefined property 'field'.
+print(getattr(foo, "field")); // expect runtime error: Undefined property 'field'.

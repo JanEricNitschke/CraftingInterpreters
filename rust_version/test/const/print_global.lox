@@ -1,2 +1,2 @@
 const x = 42;
-print x; // expect: 42
+print(x); // expect: 42

@@ -4,4 +4,4 @@ for (; i < 3; i = i + 1) {
         break;
     }
 }
-print i; // expect: 1
+print(i); // expect: 1

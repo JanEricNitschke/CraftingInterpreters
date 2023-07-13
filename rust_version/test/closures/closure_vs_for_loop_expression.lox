@@ -5,7 +5,7 @@ fun main() {
   var a = 1;
   for (a = a + 1; a <= 3; a = a + 1) {
     fun closure() {
-      print a;
+      print(a);
     }
     if (globalOne == nil) {
       globalOne = closure;

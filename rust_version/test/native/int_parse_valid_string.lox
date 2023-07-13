@@ -1,2 +1,2 @@
-print int("3"); // expect: 3
-print int("13"); // expect: 13
+print(int("3")); // expect: 3
+print(int("13")); // expect: 13

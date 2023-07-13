@@ -255,4 +255,4 @@ var x254 = 254;
 var x255 = 255;
 var x256 = 256;
 var x257 = 257;
-print x257; // expect: 257
+print(x257); // expect: 257
