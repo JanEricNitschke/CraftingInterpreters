@@ -267,9 +267,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
     }
 
     fn statement(&mut self) {
-        if self.match_(TK::Print) {
-            self.print_statement();
-        } else if self.match_(TK::For) {
+        if self.match_(TK::For) {
             self.for_statement();
         } else if self.match_(TK::If) || self.match_(TK::Unless) {
             self.conditional_statement(self.check_previous(TK::If));
@@ -314,13 +312,6 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
         }
 
         self.patch_jump(else_jump);
-    }
-
-    fn print_statement(&mut self) {
-        let line = self.line();
-        self.expression();
-        self.consume(TK::Semicolon, "Expect ';' after value.");
-        self.emit_byte(OpCode::Print, line);
     }
 
     fn return_statement(&mut self) {

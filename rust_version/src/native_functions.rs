@@ -231,7 +231,7 @@ impl NativeFunctions {
     pub fn create_names(&mut self, heap: &mut Heap) {
         for name in [
             "clock", "sqrt", "input", "float", "int", "str", "type", "getattr", "setattr", "hasattr",
-            "delattr", "rng", "printi"
+            "delattr", "rng", "print"
         ] {
             let string_id = heap.add_string(name.to_string());
             self.string_ids.insert(name.to_string(), string_id);
@@ -250,7 +250,7 @@ impl NativeFunctions {
         vm.define_native(self.string_ids["int"], 1, to_int_native);
         vm.define_native(self.string_ids["str"], 1, to_string_native);
         vm.define_native(self.string_ids["type"], 1, type_native);
-        vm.define_native(self.string_ids["printi"], 1, print_native);
+        vm.define_native(self.string_ids["print"], 1, print_native);
         vm.define_native(self.string_ids["getattr"], 2, getattr_native);
         vm.define_native(self.string_ids["setattr"], 3, setattr_native);
         vm.define_native(self.string_ids["hasattr"], 2, hasattr_native);

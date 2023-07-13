@@ -41,7 +41,6 @@ impl<'compiler, 'arena> Compiler<'compiler, 'arena> {
                 | TK::For
                 | TK::If
                 | TK::While
-                | TK::Print
                 | TK::Return,
             ) = self.current_token_kind()
             {
