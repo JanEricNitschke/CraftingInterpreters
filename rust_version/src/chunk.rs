@@ -61,6 +61,7 @@ pub enum OpCode {
 
     Jump,
     JumpIfFalse,
+    JumpIfTrue,
     Loop,
     Call,
 
@@ -231,7 +232,7 @@ impl<'chunk> InstructionDisassembler<'chunk> {
                 Constant | GetLocal | SetLocal | GetGlobal | SetGlobal | DefineGlobal
                 | DefineGlobalConst | Call | Return | GetUpvalue | SetUpvalue | Class
                 | GetProperty | SetProperty | Method | GetSuper => 1,
-                Jump | JumpIfFalse | Loop | Invoke | SuperInvoke => 2,
+                Jump | JumpIfFalse |JumpIfTrue | Loop | Invoke | SuperInvoke => 2,
                 ConstantLong
                 | GetGlobalLong
                 | SetGlobalLong
@@ -459,7 +460,7 @@ impl<'chunk> std::fmt::Debug for InstructionDisassembler<'chunk> {
             closure(Closure),
             byte(Call, GetUpvalue, SetUpvalue, Class, GetLocal, SetLocal,),
             byte_long(GetLocalLong, SetLocalLong),
-            jump(Jump, JumpIfFalse, Loop),
+            jump(Jump, JumpIfFalse, JumpIfTrue, Loop),
             invoke(Invoke, SuperInvoke),
             simple(
                 Add,

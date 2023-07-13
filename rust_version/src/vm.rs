@@ -225,7 +225,8 @@ impl VM {
                 | OpCode::DefineGlobalLong
                 | OpCode::DefineGlobalConst
                 | OpCode::DefineGlobalConstLong) => self.define_global(op),
-                OpCode::JumpIfFalse => self.jump_if_false(),
+                OpCode::JumpIfFalse => self.jump_conditional(false),
+                OpCode::JumpIfTrue => self.jump_conditional(true),
                 OpCode::Call => {
                     if let Some(value) = self.call() {
                         return value;
@@ -576,13 +577,23 @@ impl VM {
         }
     }
 
-    fn jump_if_false(&mut self) {
+    fn jump_conditional(&mut self, if_true: bool) {
         let offset = self.read_16bit_number();
+        // if_true = True -> jump_if_true
+        // -> ! (is_falsey())
+        // if_true - is_falsey() ->:
+        // true ^ false = true
+        // true ^ true = false
+        // if_true = False -> jump_if_false
+        // -> is_falsey
+        // if_true - is_falsey() ->:
+        // false ^ true = true
+        // false ^ false = false
         if self
             .stack
             .last()
             .expect("stack underflow in OP_JUMP_IF_FALSE")
-            .is_falsey()
+            .is_falsey() ^ if_true
         {
             self.callstack.current_mut().ip += offset;
         }

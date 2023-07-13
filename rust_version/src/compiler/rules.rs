@@ -251,13 +251,8 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
     }
 
     fn or(&mut self, _can_assign: bool) {
-        let else_jump = self.emit_jump(OpCode::JumpIfFalse);
-        let end_jump = self.emit_jump(OpCode::Jump);
-
-        self.patch_jump(else_jump);
-
+        let end_jump = self.emit_jump(OpCode::JumpIfTrue);
         self.emit_byte(OpCode::Pop, self.line());
-
         self.parse_precedence(Precedence::Or);
         self.patch_jump(end_jump);
     }
