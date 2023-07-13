@@ -63,6 +63,7 @@ pub enum TokenKind {
     Const,
     Var,
     While,
+    Until,
 
     Error,
     Eof,
@@ -268,18 +269,12 @@ impl<'a> Scanner<'a> {
             },
             b'd' => self.check_keyword(1, "efault", TokenKind::Default),
             b'e' => self.check_keyword(1, "lse", TokenKind::Else),
-            b'f' => {
-                if self.current - self.start > 1 {
-                    match self.source.get(self.start + 1) {
-                        Some(b'a') => self.check_keyword(2, "lse", TokenKind::False),
-                        Some(b'o') => self.check_keyword(2, "r", TokenKind::For),
-                        Some(b'u') => self.check_keyword(2, "n", TokenKind::Fun),
-                        _ => TokenKind::Identifier,
-                    }
-                } else {
-                    TokenKind::Identifier
-                }
-            }
+            b'f' => match self.source.get(self.start + 1) {
+                Some(b'a') => self.check_keyword(2, "lse", TokenKind::False),
+                Some(b'o') => self.check_keyword(2, "r", TokenKind::For),
+                Some(b'u') => self.check_keyword(2, "n", TokenKind::Fun),
+                _ => TokenKind::Identifier,
+            },
             b'i' => self.check_keyword(1, "f", TokenKind::If),
             b'n' => self.check_keyword(1, "il", TokenKind::Nil),
             b'o' => self.check_keyword(1, "r", TokenKind::Or),
@@ -290,18 +285,19 @@ impl<'a> Scanner<'a> {
                 Some(b'w') => self.check_keyword(2, "itch", TokenKind::Switch),
                 _ => TokenKind::Identifier,
             },
-            b't' => {
-                if self.current - self.start > 1 {
-                    match self.source.get(self.start + 1) {
-                        Some(b'h') => self.check_keyword(2, "is", TokenKind::This),
-                        Some(b'r') => self.check_keyword(2, "ue", TokenKind::True),
-                        _ => TokenKind::Identifier,
-                    }
-                } else {
-                    TokenKind::Identifier
-                }
+            b't' => match self.source.get(self.start + 1) {
+                Some(b'h') => self.check_keyword(2, "is", TokenKind::This),
+                Some(b'r') => self.check_keyword(2, "ue", TokenKind::True),
+                _ => TokenKind::Identifier,
+            },
+            b'u' => match self.source.get(self.start +1) {
+                Some(b'n') => match self.source.get(self.start + 2) {
+                    Some(b'l') => self.check_keyword(3, "ess", TokenKind::Unless),
+                    Some(b't') => self.check_keyword(3, "il", TokenKind::Until),
+                    _ => TokenKind::Identifier,
+                },
+                _  => TokenKind::Identifier
             }
-            b'u' => self.check_keyword(1, "nless", TokenKind::Unless),
             b'v' => self.check_keyword(1, "ar", TokenKind::Var),
             b'w' => self.check_keyword(1, "hile", TokenKind::While),
             _ => TokenKind::Identifier,

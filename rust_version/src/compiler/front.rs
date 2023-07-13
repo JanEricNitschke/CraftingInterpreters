@@ -275,8 +275,8 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
             self.conditional_statement(self.check_previous(TK::If));
         } else if self.match_(TK::Return) {
             self.return_statement();
-        } else if self.match_(TK::While) {
-            self.while_statement();
+        } else if self.match_(TK::While) || self.match_(TK::Until) {
+            self.loop_statement(self.check_previous(TK::While));
         } else if self.match_(TK::Switch) {
             self.switch_statement();
         } else if self.match_(TK::Continue) {
@@ -339,7 +339,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
         }
     }
 
-    fn while_statement(&mut self) {
+    fn loop_statement(&mut self, while_statement: bool) {
         let line = self.line();
         let old_loop_state = {
             let start = CodeOffset(self.current_chunk_len());
@@ -357,7 +357,11 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
         self.expression();
         self.consume(TK::RightParen, "Expect ')' after condition.");
 
-        let exit_jump = self.emit_jump(OpCode::JumpIfFalse);
+        let exit_jump = self.emit_jump(if while_statement {
+            OpCode::JumpIfFalse
+        } else {
+            OpCode::JumpIfTrue
+        });
         self.emit_byte(OpCode::Pop, line);
         self.statement();
         let loop_start = self.loop_state().as_ref().unwrap().start;
