@@ -15,19 +15,17 @@ $(REL_BIN): $(sources)
 cargo-test:
 	cargo test
 
-.PHONY: craftinginterpreters-test
-craftinginterpreters-test: $(DEBUG_BIN)
-		cd  $(CRAFTING_INTERPRETERS) && \
-		dart tool/bin/test.dart  $(test_level) --interpreter ../../rust_version/$(DEBUG_BIN) \
-		&& dart tool/bin/test.dart  $(test_level) --interpreter ../../rust_version/$(DEBUG_BIN) --arguments --stress-gc
 
 .PHONY: custom-dart-test
 custom-dart-test: $(DEBUG_BIN)
-	dart $(CRAFTING_INTERPRETERS)/tool/bin/test.dart clox --interpreter ./$(DEBUG_BIN) \
-	&& dart $(CRAFTING_INTERPRETERS)/tool/bin/test.dart clox --interpreter ./$(DEBUG_BIN) --arguments --stress-gc
+	dart $(CRAFTING_INTERPRETERS)/tool/bin/test.dart clox --interpreter ./$(DEBUG_BIN)
+
+.PHONY: stress-gc-test
+stress-gc-test: $(DEBUG_BIN)
+	dart $(CRAFTING_INTERPRETERS)/tool/bin/test.dart clox --interpreter ./$(DEBUG_BIN) --arguments --stress-gc
 
 .PHONY: test
-test: cargo-test craftinginterpreters-test custom-dart-test
+test: cargo-test custom-dart-test stress-gc-test
 
 .PHONY: benchmark
 benchmark: fib-benchmark more-benchmark
