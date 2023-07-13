@@ -83,9 +83,10 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
 
             if !compiler.check(TK::RightParen) {
                 loop {
-                    compiler.current_function_mut().arity += 1;
-                    if compiler.current_function().arity > 255 {
+                    if compiler.current_function().arity == 255 {
                         compiler.error_at_current("Can't have more than 255 parameters.");
+                    } else {
+                        compiler.current_function_mut().arity += 1;
                     }
                     let constant = compiler.parse_variable("Expect parameter name.", true);
                     compiler.define_variable(constant, true);

@@ -20,3 +20,5 @@ class Tree {
 print(str(Tree)); // expect: <class Tree>
 print(str(Tree())); // expect: <Tree instance>
 print(str(Tree().stuff)); // expect: <bound method Tree.stuff of <Tree instance>>
+
+print(str([1, 2, 3])); // expect: [1, 2, 3]

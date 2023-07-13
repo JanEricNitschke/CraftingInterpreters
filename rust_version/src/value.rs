@@ -23,6 +23,8 @@ pub enum Value {
     Class(Class),
     Instance(Instance),
     BoundMethod(BoundMethod),
+
+    List(List),
 }
 
 #[derive(Debug, Copy, PartialEq, PartialOrd, Clone, From, Neg)]
@@ -215,6 +217,12 @@ impl From<Number> for Value {
     }
 }
 
+impl From<List> for Value {
+    fn from(l: List) -> Self {
+        Value::List(l)
+    }
+}
+
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -237,6 +245,24 @@ impl std::fmt::Display for Value {
                 *method.method.as_closure().function.name,
                 *method.receiver
             )),
+            Value::List(list) => f.pad(&{
+                let mapped = list
+                    .items
+                    .iter()
+                    .map(|value_id| unsafe { &value_id.arena.as_ref()[value_id] })
+                    .collect::<Vec<_>>();
+
+                let mut comma_separated = String::new();
+                comma_separated.push('[');
+                for num in &mapped[0..mapped.len() - 1] {
+                    comma_separated.push_str(&num.to_string());
+                    comma_separated.push_str(", ");
+                }
+
+                comma_separated.push_str(&mapped[mapped.len() - 1].to_string());
+                comma_separated.push(']');
+                comma_separated
+            }),
         }
     }
 }
@@ -396,5 +422,17 @@ impl PartialEq for BoundMethod {
     fn eq(&self, _other: &Self) -> bool {
         // Two different bound methods are always considered different
         false
+    }
+}
+
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
+pub struct List {
+    pub items: Vec<ValueId>,
+}
+
+impl List {
+    #[must_use]
+    pub fn new() -> Self {
+        List { items: Vec::new() }
     }
 }

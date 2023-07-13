@@ -14,6 +14,8 @@ pub enum TokenKind {
     RightParen,
     LeftBrace,
     RightBrace,
+    LeftBracket,
+    RightBracket,
     Colon,
 
     Comma,
@@ -119,6 +121,8 @@ impl<'a> Scanner<'a> {
                 b')' => TK::RightParen,
                 b'{' => TK::LeftBrace,
                 b'}' => TK::RightBrace,
+                b'[' => TK::LeftBracket,
+                b']' => TK::RightBracket,
                 b';' => TK::Semicolon,
                 b',' => TK::Comma,
                 b'.' => TK::Dot,

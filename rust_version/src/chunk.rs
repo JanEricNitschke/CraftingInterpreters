@@ -95,6 +95,10 @@ pub enum OpCode {
     Inherit,
     GetSuper,
     SuperInvoke,
+
+    BuildList,
+    IndexSubscript,
+    StoreSubscript,
 }
 
 impl OpCode {
@@ -228,10 +232,11 @@ impl<'chunk> InstructionDisassembler<'chunk> {
         std::mem::size_of::<OpCode>()
             + match opcode {
                 Negate | Add | Subtract | Multiply | Divide | Nil | True | False | Not | Equal
-                | Greater | Less | Print | Pop | Dup | CloseUpvalue | Inherit => 0,
+                | Greater | Less | Print | Pop | Dup | CloseUpvalue | Inherit | IndexSubscript
+                | StoreSubscript => 0,
                 Constant | GetLocal | SetLocal | GetGlobal | SetGlobal | DefineGlobal
                 | DefineGlobalConst | Call | Return | GetUpvalue | SetUpvalue | Class
-                | GetProperty | SetProperty | Method | GetSuper => 1,
+                | GetProperty | SetProperty | Method | GetSuper | BuildList => 1,
                 Jump | JumpIfFalse | JumpIfTrue | Loop | Invoke | SuperInvoke => 2,
                 ConstantLong
                 | GetGlobalLong
@@ -458,7 +463,7 @@ impl<'chunk> std::fmt::Debug for InstructionDisassembler<'chunk> {
                 SetGlobalLong,
             ),
             closure(Closure),
-            byte(Call, GetUpvalue, SetUpvalue, Class, GetLocal, SetLocal,),
+            byte(Call, GetUpvalue, SetUpvalue, Class, GetLocal, SetLocal, BuildList),
             byte_long(GetLocalLong, SetLocalLong),
             jump(Jump, JumpIfFalse, JumpIfTrue, Loop),
             invoke(Invoke, SuperInvoke),
@@ -481,6 +486,8 @@ impl<'chunk> std::fmt::Debug for InstructionDisassembler<'chunk> {
                 Return,
                 Subtract,
                 True,
+                IndexSubscript,
+                StoreSubscript,
             ),
         )?;
         Ok(())

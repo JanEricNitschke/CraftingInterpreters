@@ -116,6 +116,7 @@ fn type_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
         },
         Value::String(_) => Value::String(heap.add_string("<type string>".to_string())),
         Value::Upvalue(_) => Value::String(heap.add_string("<type upvalue>".to_string())),
+        Value::List(_) => Value::String(heap.add_string("<type list>".to_string())),
     };
     Ok(heap.add_value(string))
 }

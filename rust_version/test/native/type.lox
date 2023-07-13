@@ -20,3 +20,5 @@ class Tree {
 print(type(Tree)); // expect: <type class>
 print(type(Tree())); // expect: <type Tree>
 print(type(Tree().stuff)); // expect: <type bound method>
+
+print(type([1, 2, 3])); // expect: <type list>

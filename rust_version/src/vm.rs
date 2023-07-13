@@ -6,7 +6,7 @@ use rustc_hash::FxHashMap as HashMap;
 use crate::chunk::InstructionDisassembler;
 use crate::heap::{FunctionId, ValueId};
 use crate::native_functions::NativeFunctions;
-use crate::value::{Class, Closure, Instance, Number, Upvalue};
+use crate::value::{Class, Closure, Instance, List, Number, Upvalue};
 use crate::{
     chunk::{CodeOffset, OpCode},
     compiler::Compiler,
@@ -435,6 +435,28 @@ impl VM {
                         return InterpretResult::RuntimeError;
                     }
                 }
+                OpCode::BuildList => {
+                    let mut list = List::new();
+
+                    let arg_count = self.read_byte();
+                    for index in (0..arg_count).rev() {
+                        list.items.push(*self.peek(index as usize).unwrap())
+                    }
+                    for _ in 0..arg_count {
+                        self.stack.pop();
+                    }
+                    self.stack_push_value(list.into());
+                }
+                OpCode::IndexSubscript => {
+                    if let Some(value) = self.index_subscript() {
+                        return value;
+                    }
+                }
+                OpCode::StoreSubscript => {
+                    if let Some(value) = self.store_subscript() {
+                        return value;
+                    }
+                }
             };
         }
     }
@@ -491,6 +513,109 @@ impl VM {
             runtime_error!(self, "Operands must be numbers.");
         }
         ok
+    }
+
+    fn index_subscript(&mut self) -> Option<InterpretResult> {
+        let index = match &self.heap.values[&self
+            .stack
+            .pop()
+            .expect("Stack underflow in OP_INDEX_SUBSCRIPT")]
+        {
+            Value::Number(Number::Integer(n)) => match usize::try_from(*n) {
+                Ok(value) => value,
+                Err(_) => {
+                    runtime_error!(
+                        self,
+                        "Can not index into list with negative or too large numbers, got `{}`.",
+                        n
+                    );
+                    return Some(InterpretResult::RuntimeError);
+                }
+            },
+            x => {
+                runtime_error!(self, "Can only index into list with integer, got `{}`.", x);
+                return Some(InterpretResult::RuntimeError);
+            }
+        };
+
+        let list = match &self.heap.values[&self
+            .stack
+            .pop()
+            .expect("Stack underflow in OP_INDEX_SUBSCRIPT")]
+        {
+            Value::List(list) => list,
+            x => {
+                runtime_error!(self, "Can only index into lists, got `{}`.", x);
+                return Some(InterpretResult::RuntimeError);
+            }
+        };
+        let result = match list.items.get(index) {
+            Some(value) => value,
+            None => {
+                runtime_error!(
+                    self,
+                    "Index `{}` is out of bounds of list  with len `{}`.",
+                    index,
+                    list.items.len()
+                );
+                return Some(InterpretResult::RuntimeError);
+            }
+        };
+        self.stack_push(*result);
+        None
+    }
+
+    fn store_subscript(&mut self) -> Option<InterpretResult> {
+        let item = self
+            .stack
+            .pop()
+            .expect("Stack underflow in OP_STORE_SUBSCRIPT");
+        let index = match &self.heap.values[&self
+            .stack
+            .pop()
+            .expect("Stack underflow in OP_STORE_SUBSCRIPT")]
+        {
+            Value::Number(Number::Integer(n)) => match usize::try_from(*n) {
+                Ok(value) => value,
+                Err(_) => {
+                    runtime_error!(
+                        self,
+                        "Can not index into list with negative or too large numbers, got `{}`.",
+                        n
+                    );
+                    return Some(InterpretResult::RuntimeError);
+                }
+            },
+            x => {
+                runtime_error!(self, "Can only index into list with integer, got `{}`.", x);
+                return Some(InterpretResult::RuntimeError);
+            }
+        };
+        let list = match &mut self.heap.values[&self
+            .stack
+            .pop()
+            .expect("Stack underflow in OP_INDEX_SUBSCRIPT")]
+        {
+            Value::List(list) => list,
+            x => {
+                runtime_error!(self, "Can only index into lists, got `{}`.", x);
+                return Some(InterpretResult::RuntimeError);
+            }
+        };
+
+        if let Some(elem) = list.items.get_mut(index) {
+            *elem = item;
+        } else {
+            runtime_error!(
+                self,
+                "Index `{}` is out of bounds of list  with len `{}`.",
+                index,
+                list.items.len()
+            );
+            return Some(InterpretResult::RuntimeError);
+        }
+        self.stack_push(item);
+        None
     }
 
     fn set_local(&mut self, op: OpCode) {

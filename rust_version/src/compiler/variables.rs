@@ -292,6 +292,7 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         if !self.check(TK::RightParen) {
             loop {
                 self.expression();
+
                 if arg_count == 255 {
                     self.error("Can't have more than 255 arguments.");
                     break;

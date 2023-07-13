@@ -24,7 +24,7 @@ new_key_type! {
 pub struct ArenaId<K: Key, T: ArenaValue> {
     id: K,
     #[derivative(Hash = "ignore")]
-    arena: NonNull<Arena<K, T>>, // Yes this is terrible, yes I'm OK with it for this projec
+    pub arena: NonNull<Arena<K, T>>, // Yes this is terrible, yes I'm OK with it for this projec
 }
 
 impl<K: Key, T: ArenaValue + Clone> Copy for ArenaId<K, T> {}
@@ -381,6 +381,11 @@ impl Heap {
                 let method_id = bound_method.method.id;
                 self.values.gray.push(receiver_id);
                 self.values.gray.push(method_id);
+            }
+            Value::List(list) => {
+                for item in &list.items {
+                    self.values.gray.push(item.id);
+                }
             }
         }
     }

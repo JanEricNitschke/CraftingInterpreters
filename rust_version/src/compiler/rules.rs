@@ -18,6 +18,7 @@ pub(super) enum Precedence {
     Factor,     // * /
     Unary,      // ! -
     Call,       // . ()
+    Subscript,  // []
     Primary,
 }
 
@@ -61,61 +62,63 @@ macro_rules! make_rules {
     }};
 }
 
-pub(super) type Rules<'scanner, 'arena> = [Rule<'scanner, 'arena>; 49];
+pub(super) type Rules<'scanner, 'arena> = [Rule<'scanner, 'arena>; 51];
 
 // Can't be static because the associated function types include lifetimes
 #[rustfmt::skip]
 pub(super) fn make_rules<'scanner, 'arena>() -> Rules<'scanner, 'arena> {
     make_rules!(
-        LeftParen    = [grouping, call,   Call      ],
-        RightParen   = [None,     None,   None      ],
-        LeftBrace    = [None,     None,   None      ],
-        RightBrace   = [None,     None,   None      ],
-        Colon        = [None,     None,   None      ],
-        Comma        = [None,     None,   None      ],
-        Default      = [None,     None,   None      ],
-        Dot          = [None,     dot,    Call      ],
-        Minus        = [unary,    binary, Term      ],
-        Plus         = [None,     binary, Term      ],
-        Semicolon    = [None,     None,   None      ],
-        Slash        = [None,     binary, Factor    ],
-        Star         = [None,     binary, Factor    ],
-        Bang         = [unary,    None,   None      ],
-        BangEqual    = [None,     binary, Equality  ],
-        Equal        = [None,     None,   None      ],
-        EqualEqual   = [None,     binary, Equality  ],
-        Greater      = [None,     binary, Comparison],
-        GreaterEqual = [None,     binary, Comparison],
-        Less         = [None,     binary, Comparison],
-        LessEqual    = [None,     binary, Comparison],
-        Identifier   = [variable, None,   None      ],
-        String       = [string,   None,   None      ],
-        Number       = [number,   None,   None      ],
-        Integer      = [integer,  None,   None      ],
-        And          = [None,     and,    And       ],
-        Case         = [None,     None,   None      ],
-        Class        = [None,     None,   None      ],
-        Const        = [None,     None,   None      ],
-        Continue     = [None,     None,   None      ],
-        Break        = [None,     None,   None      ],
-        Else         = [None,     None,   None      ],
-        False        = [literal,  None,   None      ],
-        For          = [None,     None,   None      ],
-        Fun          = [None,     None,   None      ],
-        If           = [None,     None,   None      ],
-        Unless       = [None,     None,   None      ],
-        Nil          = [literal,  None,   None      ],
-        Or           = [None,     or,     Or        ],
-        Return       = [None,     None,   None      ],
-        Switch       = [None,     None,   None      ],
-        Super        = [super_,   None,   None      ],
-        This         = [this,     None,   None      ],
-        True         = [literal,  None,   None      ],
-        Var          = [None,     None,   None      ],
-        While        = [None,     None,   None      ],
-        Until        = [None,     None,   None      ],
-        Error        = [None,     None,   None      ],
-        Eof          = [None,     None,   None      ],
+        LeftParen    = [grouping, call,      Call      ],
+        RightParen   = [None,     None,      None      ],
+        LeftBrace    = [None,     None,      None      ],
+        RightBrace   = [None,     None,      None      ],
+        Colon        = [None,     None,      None      ],
+        LeftBracket  = [list,     subscript, Subscript ],
+        RightBracket = [None,     None,      None      ],
+        Comma        = [None,     None,      None      ],
+        Default      = [None,     None,      None      ],
+        Dot          = [None,     dot,       Call      ],
+        Minus        = [unary,    binary,    Term      ],
+        Plus         = [None,     binary,    Term      ],
+        Semicolon    = [None,     None,      None      ],
+        Slash        = [None,     binary,    Factor    ],
+        Star         = [None,     binary,    Factor    ],
+        Bang         = [unary,    None,      None      ],
+        BangEqual    = [None,     binary,    Equality  ],
+        Equal        = [None,     None,      None      ],
+        EqualEqual   = [None,     binary,    Equality  ],
+        Greater      = [None,     binary,    Comparison],
+        GreaterEqual = [None,     binary,    Comparison],
+        Less         = [None,     binary,    Comparison],
+        LessEqual    = [None,     binary,    Comparison],
+        Identifier   = [variable, None,      None      ],
+        String       = [string,   None,      None      ],
+        Number       = [number,   None,      None      ],
+        Integer      = [integer,  None,      None      ],
+        And          = [None,     and,       And       ],
+        Case         = [None,     None,      None      ],
+        Class        = [None,     None,      None      ],
+        Const        = [None,     None,      None      ],
+        Continue     = [None,     None,      None      ],
+        Break        = [None,     None,      None      ],
+        Else         = [None,     None,      None      ],
+        False        = [literal,  None,      None      ],
+        For          = [None,     None,      None      ],
+        Fun          = [None,     None,      None      ],
+        If           = [None,     None,      None      ],
+        Unless       = [None,     None,      None      ],
+        Nil          = [literal,  None,      None      ],
+        Or           = [None,     or,        Or        ],
+        Return       = [None,     None,      None      ],
+        Switch       = [None,     None,      None      ],
+        Super        = [super_,   None,      None      ],
+        This         = [this,     None,      None      ],
+        True         = [literal,  None,      None      ],
+        Var          = [None,     None,      None      ],
+        While        = [None,     None,      None      ],
+        Until        = [None,     None,      None      ],
+        Error        = [None,     None,      None      ],
+        Eof          = [None,     None,      None      ],
     )
 }
 
@@ -248,6 +251,43 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         let value = lexeme[1..lexeme.len() - 1].to_string();
         let string_id = self.string_id(&value);
         self.emit_constant(string_id);
+    }
+
+    fn list(&mut self, _can_assign: bool) {
+        let mut item_count = 0;
+        if !self.check(TK::RightBracket) {
+            loop {
+                if self.check(TK::RightBracket) {
+                    // Trailing comma
+                    break;
+                }
+                // No assignments
+                self.parse_precedence(Precedence::Or);
+                if item_count == 255 {
+                    self.error("Can't have more than 255 items in a list literal.");
+                    break;
+                } else {
+                    item_count += 1;
+                }
+                if !self.match_(TK::Comma) {
+                    break;
+                }
+            }
+        }
+        self.consume(TK::RightBracket, "Expect ']' after list literal.");
+        self.emit_bytes(OpCode::BuildList, item_count, self.line());
+    }
+
+    fn subscript(&mut self, can_assign: bool) {
+        self.parse_precedence(Precedence::Or);
+        self.consume(TK::RightBracket, "Expect ']' after index.");
+
+        if can_assign && self.match_(TK::Equal) {
+            self.expression();
+            self.emit_byte(OpCode::StoreSubscript, self.line());
+        } else {
+            self.emit_byte(OpCode::IndexSubscript, self.line());
+        }
     }
 
     fn and(&mut self, _can_assign: bool) {
