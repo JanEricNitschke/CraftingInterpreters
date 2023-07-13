@@ -1,9 +1,3 @@
-class A  {
-    stuff() {
-        print("A");
-    }
-}
+var a = clock;
 
-
-a = A();
-a.stuff();
+print(a());

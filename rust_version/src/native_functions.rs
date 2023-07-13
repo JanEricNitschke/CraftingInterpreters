@@ -153,6 +153,19 @@ fn rng_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     }
 }
 
+fn append_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
+    match &mut heap.values[args[0]] {
+        Value::List(list) => {
+            list.items.push(*args[1]);
+            Ok(heap.builtin_constants().nil)
+        }
+        x => Err(format!(
+            "'Append' expects its first argument to be a list, got `{}` instead.",
+            x
+        )),
+    }
+}
+
 fn getattr_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     match (&heap.values[args[0]], &heap.values[args[1]]) {
         (Value::Instance(instance), Value::String(string_id)) => {
@@ -246,7 +259,7 @@ impl NativeFunctions {
     pub fn create_names(&mut self, heap: &mut Heap) {
         for name in [
             "clock", "sqrt", "input", "float", "int", "str", "type", "getattr", "setattr",
-            "hasattr", "delattr", "rng", "print",
+            "hasattr", "delattr", "rng", "print", "append",
         ] {
             let string_id = heap.add_string(name.to_string());
             self.string_ids.insert(name.to_string(), string_id);
@@ -271,5 +284,6 @@ impl NativeFunctions {
         vm.define_native(self.string_ids["hasattr"], &[2], hasattr_native);
         vm.define_native(self.string_ids["delattr"], &[2], delattr_native);
         vm.define_native(self.string_ids["rng"], &[2], rng_native);
+        vm.define_native(self.string_ids["append"], &[2], append_native);
     }
 }
