@@ -103,13 +103,17 @@ fn type_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
         Value::Class(_) => Value::String(heap.add_string("<type class>".to_string())),
         Value::Closure(_) => Value::String(heap.add_string("<type closure>".to_string())),
         Value::Function(_) => Value::String(heap.add_string("<type function>".to_string())),
-        Value::Instance(instance) => Value::String(heap.add_string("<type ".to_string() + instance.class.as_class().name.as_str() + ">")),
-        Value::NativeFunction(_) => Value::String(heap.add_string("<type native function>".to_string())),
+        Value::Instance(instance) => Value::String(
+            heap.add_string("<type ".to_string() + instance.class.as_class().name.as_str() + ">"),
+        ),
+        Value::NativeFunction(_) => {
+            Value::String(heap.add_string("<type native function>".to_string()))
+        }
         Value::Nil => Value::String(heap.add_string("<type nil>".to_string())),
         Value::Number(n) => match n {
             Number::Float(_) => Value::String(heap.add_string("<type float>".to_string())),
-            Number::Integer(_) =>  Value::String(heap.add_string("<type int>".to_string())),
-        }
+            Number::Integer(_) => Value::String(heap.add_string("<type int>".to_string())),
+        },
         Value::String(_) => Value::String(heap.add_string("<type string>".to_string())),
         Value::Upvalue(_) => Value::String(heap.add_string("<type upvalue>".to_string())),
     };
@@ -117,11 +121,21 @@ fn type_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
 }
 
 fn print_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
+    let end = if args.len() == 2 {
+        match &heap.values[args[1]] {
+            Value::String(string_id) => heap.strings[string_id].clone(),
+            x => {
+                return Err(format!(
+                    "Option second argument to 'print' has to be a string, got: {}",
+                    x
+                ))
+            }
+        }
+    } else {
+        "\n".to_string()
+    };
     let value = &heap.values[args[0]];
-    println!(
-        "{}",
-        value
-    );
+    print!("{}{}", value, end);
     Ok(heap.builtin_constants().nil)
 }
 
@@ -230,8 +244,8 @@ impl NativeFunctions {
 
     pub fn create_names(&mut self, heap: &mut Heap) {
         for name in [
-            "clock", "sqrt", "input", "float", "int", "str", "type", "getattr", "setattr", "hasattr",
-            "delattr", "rng", "print"
+            "clock", "sqrt", "input", "float", "int", "str", "type", "getattr", "setattr",
+            "hasattr", "delattr", "rng", "print",
         ] {
             let string_id = heap.add_string(name.to_string());
             self.string_ids.insert(name.to_string(), string_id);
@@ -243,18 +257,18 @@ impl NativeFunctions {
     }
 
     pub fn define_functions(&self, vm: &mut VM) {
-        vm.define_native(self.string_ids["clock"], 0, clock_native);
-        vm.define_native(self.string_ids["sqrt"], 1, sqrt_native);
-        vm.define_native(self.string_ids["input"], 1, input_native);
-        vm.define_native(self.string_ids["float"], 1, to_float_native);
-        vm.define_native(self.string_ids["int"], 1, to_int_native);
-        vm.define_native(self.string_ids["str"], 1, to_string_native);
-        vm.define_native(self.string_ids["type"], 1, type_native);
-        vm.define_native(self.string_ids["print"], 1, print_native);
-        vm.define_native(self.string_ids["getattr"], 2, getattr_native);
-        vm.define_native(self.string_ids["setattr"], 3, setattr_native);
-        vm.define_native(self.string_ids["hasattr"], 2, hasattr_native);
-        vm.define_native(self.string_ids["delattr"], 2, delattr_native);
-        vm.define_native(self.string_ids["rng"], 2, rng_native);
+        vm.define_native(self.string_ids["clock"], &[0], clock_native);
+        vm.define_native(self.string_ids["sqrt"], &[1], sqrt_native);
+        vm.define_native(self.string_ids["input"], &[1], input_native);
+        vm.define_native(self.string_ids["float"], &[1], to_float_native);
+        vm.define_native(self.string_ids["int"], &[1], to_int_native);
+        vm.define_native(self.string_ids["str"], &[1], to_string_native);
+        vm.define_native(self.string_ids["type"], &[1], type_native);
+        vm.define_native(self.string_ids["print"], &[1, 2], print_native);
+        vm.define_native(self.string_ids["getattr"], &[2], getattr_native);
+        vm.define_native(self.string_ids["setattr"], &[3], setattr_native);
+        vm.define_native(self.string_ids["hasattr"], &[2], hasattr_native);
+        vm.define_native(self.string_ids["delattr"], &[2], delattr_native);
+        vm.define_native(self.string_ids["rng"], &[2], rng_native);
     }
 }

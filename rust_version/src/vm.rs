@@ -836,21 +836,32 @@ impl VM {
 
     fn execute_native_call(&mut self, f: &NativeFunction, arg_count: u8) -> bool {
         let arity = f.arity;
-        if arg_count != arity {
-            runtime_error!(
-                self,
-                "Native function '{}' expected {} argument{}, got {}.",
-                f.name,
-                arity,
-                {
-                    if arity != 1 {
-                        "s"
-                    } else {
-                        ""
-                    }
-                },
-                arg_count
-            );
+        if !arity.contains(&arg_count) {
+            if arity.len() == 1 {
+                runtime_error!(
+                    self,
+                    "Native function '{}' expected {} argument{}, got {}.",
+                    f.name,
+                    arity[0],
+                    {
+                        if arity[0] != 1 {
+                            "s"
+                        } else {
+                            ""
+                        }
+                    },
+                    arg_count
+                );
+            } else {
+                runtime_error!(
+                    self,
+                    "Native function '{}' expected any of {:?} arguments, got {}.",
+                    f.name,
+                    arity,
+                    arg_count
+                );
+            };
+
             return false;
         }
         let fun = f.fun;
@@ -985,7 +996,7 @@ impl VM {
         true
     }
 
-    pub fn define_native(&mut self, name: StringId, arity: u8, fun: NativeFunctionImpl) {
+    pub fn define_native(&mut self, name: StringId, arity: &'static [u8], fun: NativeFunctionImpl) {
         let value = Value::NativeFunction(NativeFunction {
             name: name.to_string(),
             arity,

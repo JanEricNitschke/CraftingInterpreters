@@ -333,7 +333,7 @@ impl Function {
 #[derivative(Debug, PartialEq, PartialOrd, Clone)]
 pub struct NativeFunction {
     pub name: String,
-    pub arity: u8,
+    pub arity: &'static [u8],
 
     #[derivative(
             Debug = "ignore",
