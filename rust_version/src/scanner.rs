@@ -51,6 +51,7 @@ pub enum TokenKind {
     For,
     Fun,
     If,
+    Unless,
     Nil,
     Or,
     Print,
@@ -267,18 +268,6 @@ impl<'a> Scanner<'a> {
             },
             b'd' => self.check_keyword(1, "efault", TokenKind::Default),
             b'e' => self.check_keyword(1, "lse", TokenKind::Else),
-            b'i' => self.check_keyword(1, "f", TokenKind::If),
-            b'n' => self.check_keyword(1, "il", TokenKind::Nil),
-            b'o' => self.check_keyword(1, "r", TokenKind::Or),
-            b'p' => self.check_keyword(1, "rint", TokenKind::Print),
-            b'r' => self.check_keyword(1, "eturn", TokenKind::Return),
-            b's' => match self.source.get(self.start + 1) {
-                Some(b'u') => self.check_keyword(2, "per", TokenKind::Super),
-                Some(b'w') => self.check_keyword(2, "itch", TokenKind::Switch),
-                _ => TokenKind::Identifier,
-            },
-            b'v' => self.check_keyword(1, "ar", TokenKind::Var),
-            b'w' => self.check_keyword(1, "hile", TokenKind::While),
             b'f' => {
                 if self.current - self.start > 1 {
                     match self.source.get(self.start + 1) {
@@ -291,6 +280,16 @@ impl<'a> Scanner<'a> {
                     TokenKind::Identifier
                 }
             }
+            b'i' => self.check_keyword(1, "f", TokenKind::If),
+            b'n' => self.check_keyword(1, "il", TokenKind::Nil),
+            b'o' => self.check_keyword(1, "r", TokenKind::Or),
+            b'p' => self.check_keyword(1, "rint", TokenKind::Print),
+            b'r' => self.check_keyword(1, "eturn", TokenKind::Return),
+            b's' => match self.source.get(self.start + 1) {
+                Some(b'u') => self.check_keyword(2, "per", TokenKind::Super),
+                Some(b'w') => self.check_keyword(2, "itch", TokenKind::Switch),
+                _ => TokenKind::Identifier,
+            },
             b't' => {
                 if self.current - self.start > 1 {
                     match self.source.get(self.start + 1) {
@@ -302,6 +301,9 @@ impl<'a> Scanner<'a> {
                     TokenKind::Identifier
                 }
             }
+            b'u' => self.check_keyword(1, "nless", TokenKind::Unless),
+            b'v' => self.check_keyword(1, "ar", TokenKind::Var),
+            b'w' => self.check_keyword(1, "hile", TokenKind::While),
             _ => TokenKind::Identifier,
         }
     }

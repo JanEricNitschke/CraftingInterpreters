@@ -271,8 +271,8 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
             self.print_statement();
         } else if self.match_(TK::For) {
             self.for_statement();
-        } else if self.match_(TK::If) {
-            self.if_statement();
+        } else if self.match_(TK::If) || self.match_(TK::Unless) {
+            self.conditional_statement(self.check_previous(TK::If));
         } else if self.match_(TK::Return) {
             self.return_statement();
         } else if self.match_(TK::While) {
@@ -292,13 +292,17 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
         }
     }
 
-    fn if_statement(&mut self) {
+    fn conditional_statement(&mut self, if_statement: bool) {
         let line = self.line();
         self.consume(TK::LeftParen, "Expect '(' after 'if'.");
         self.expression();
         self.consume(TK::RightParen, "Expect ')' after condition");
 
-        let then_jump = self.emit_jump(OpCode::JumpIfFalse);
+        let then_jump = self.emit_jump(if if_statement {
+            OpCode::JumpIfFalse
+        } else {
+            OpCode::JumpIfTrue
+        });
         self.emit_byte(OpCode::Pop, line);
         self.statement();
 
