@@ -6,7 +6,7 @@ use rustc_hash::FxHashMap as HashMap;
 use crate::chunk::InstructionDisassembler;
 use crate::heap::{FunctionId, ValueId};
 use crate::native_functions::NativeFunctions;
-use crate::value::{Class, Closure, Instance, Upvalue, Number};
+use crate::value::{Class, Closure, Instance, Number, Upvalue};
 use crate::{
     chunk::{CodeOffset, OpCode},
     compiler::Compiler,
@@ -675,7 +675,11 @@ impl VM {
 
         // There is one case where equality-by-reference does not imply *actual* equality: NaN
         let value = match (left, right) {
-            (Value::Number(Number::Float(left)), Value::Number(Number::Float(right))) if left.is_nan() && right.is_nan() => false,
+            (Value::Number(Number::Float(left)), Value::Number(Number::Float(right)))
+                if left.is_nan() && right.is_nan() =>
+            {
+                false
+            }
             (left, right) => left_id == right_id || left == right,
         };
 

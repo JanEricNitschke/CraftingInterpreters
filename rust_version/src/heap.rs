@@ -8,7 +8,7 @@ use derivative::Derivative;
 use slotmap::{new_key_type, HopSlotMap as SlotMap, Key};
 use std::fmt::{Debug, Display};
 
-use crate::value::{Function, Upvalue, Value, Number};
+use crate::value::{Function, Number, Upvalue, Value};
 
 pub trait ArenaValue: Debug + Display + PartialEq {}
 impl<T> ArenaValue for T where T: Debug + Display + PartialEq {}
@@ -202,7 +202,7 @@ impl BuiltinConstants {
             integers: (0..1024)
                 .map(|n| heap.add_value(Value::Number(Number::Integer(n))))
                 .collect(),
-                floats: (0..1024)
+            floats: (0..1024)
                 .map(|n| heap.add_value(Value::Number(Number::Float(n.into()))))
                 .collect(),
         }
@@ -227,7 +227,6 @@ impl BuiltinConstants {
                 }
             }
         }
-
     }
 }
 

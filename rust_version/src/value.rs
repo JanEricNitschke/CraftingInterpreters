@@ -54,7 +54,6 @@ impl std::fmt::Display for Number {
         match self {
             Number::Float(num) => f.pad(&format!("{:?}", num)),
             Number::Integer(num) => f.pad(&format!("{}", num)),
-
         }
     }
 }

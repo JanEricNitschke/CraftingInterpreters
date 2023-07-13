@@ -223,8 +223,6 @@ impl<'a> Scanner<'a> {
             self.advance();
         }
 
-
-
         // Fractions
         if self.peek() == Some(&b'.')
             && self
@@ -237,7 +235,7 @@ impl<'a> Scanner<'a> {
                 self.advance();
             }
         } else {
-            return  self.make_token(TokenKind::Integer);
+            return self.make_token(TokenKind::Integer);
         }
 
         self.make_token(TokenKind::Number)
@@ -295,14 +293,14 @@ impl<'a> Scanner<'a> {
                 Some(b'r') => self.check_keyword(2, "ue", TokenKind::True),
                 _ => TokenKind::Identifier,
             },
-            b'u' => match self.source.get(self.start +1) {
+            b'u' => match self.source.get(self.start + 1) {
                 Some(b'n') => match self.source.get(self.start + 2) {
                     Some(b'l') => self.check_keyword(3, "ess", TokenKind::Unless),
                     Some(b't') => self.check_keyword(3, "il", TokenKind::Until),
-                    _ => TokenKind::Identifier
+                    _ => TokenKind::Identifier,
                 },
-                _  => TokenKind::Identifier
-            }
+                _ => TokenKind::Identifier,
+            },
             b'v' => self.check_keyword(1, "ar", TokenKind::Var),
             b'w' => self.check_keyword(1, "hile", TokenKind::While),
             _ => TokenKind::Identifier,

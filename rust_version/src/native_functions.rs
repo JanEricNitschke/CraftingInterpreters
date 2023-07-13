@@ -1,7 +1,6 @@
+use rand::Rng;
 use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
-use rand::Rng;
-
 
 use rustc_hash::FxHashMap as HashMap;
 
@@ -91,12 +90,22 @@ fn to_int_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> 
     }
 }
 
+fn to_string_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
+    let value = &heap.values[args[0]];
+    let string = Value::String(heap.add_string(value.to_string()));
+    Ok(heap.add_value(string))
+}
+
 fn rng_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     match (&heap.values[args[0]], &heap.values[args[1]]) {
-        (Value::Number(Number::Integer(min)), Value::Number(Number::Integer(max))) => {
-            Ok(heap.add_value(Value::Number(rand::thread_rng().gen_range(*min..=*max).into())))
-        }
-        (other_1, other_2) => Err(format!("'rng' expected two integers as arguments, got: `{}` and `{}` instead.", other_1, other_2))
+        (Value::Number(Number::Integer(min)), Value::Number(Number::Integer(max))) => Ok(heap
+            .add_value(Value::Number(
+                rand::thread_rng().gen_range(*min..=*max).into(),
+            ))),
+        (other_1, other_2) => Err(format!(
+            "'rng' expected two integers as arguments, got: `{}` and `{}` instead.",
+            other_1, other_2
+        )),
     }
 }
 
@@ -192,7 +201,8 @@ impl NativeFunctions {
 
     pub fn create_names(&mut self, heap: &mut Heap) {
         for name in [
-            "clock", "sqrt", "input", "float", "int", "getattr", "setattr", "hasattr", "delattr", "rng"
+            "clock", "sqrt", "input", "float", "int", "str", "getattr", "setattr", "hasattr",
+            "delattr", "rng",
         ] {
             let string_id = heap.add_string(name.to_string());
             self.string_ids.insert(name.to_string(), string_id);
@@ -209,6 +219,7 @@ impl NativeFunctions {
         vm.define_native(self.string_ids["input"], 1, input_native);
         vm.define_native(self.string_ids["float"], 1, to_float_native);
         vm.define_native(self.string_ids["int"], 1, to_int_native);
+        vm.define_native(self.string_ids["str"], 1, to_string_native);
         vm.define_native(self.string_ids["getattr"], 2, getattr_native);
         vm.define_native(self.string_ids["setattr"], 3, setattr_native);
         vm.define_native(self.string_ids["hasattr"], 2, hasattr_native);

@@ -232,7 +232,7 @@ impl<'chunk> InstructionDisassembler<'chunk> {
                 Constant | GetLocal | SetLocal | GetGlobal | SetGlobal | DefineGlobal
                 | DefineGlobalConst | Call | Return | GetUpvalue | SetUpvalue | Class
                 | GetProperty | SetProperty | Method | GetSuper => 1,
-                Jump | JumpIfFalse |JumpIfTrue | Loop | Invoke | SuperInvoke => 2,
+                Jump | JumpIfFalse | JumpIfTrue | Loop | Invoke | SuperInvoke => 2,
                 ConstantLong
                 | GetGlobalLong
                 | SetGlobalLong
