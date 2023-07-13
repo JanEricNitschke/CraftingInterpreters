@@ -1,0 +1,2 @@
+print "Some" + str(5) + "string"; // expect: Some5string
+printi("Some" + str(5) + "string"); // expect: Some5string

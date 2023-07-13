@@ -116,6 +116,15 @@ fn type_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     Ok(heap.add_value(string))
 }
 
+fn print_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
+    let value = &heap.values[args[0]];
+    println!(
+        "{}",
+        value
+    );
+    Ok(heap.builtin_constants().nil)
+}
+
 fn rng_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     match (&heap.values[args[0]], &heap.values[args[1]]) {
         (Value::Number(Number::Integer(min)), Value::Number(Number::Integer(max))) => Ok(heap
@@ -222,7 +231,7 @@ impl NativeFunctions {
     pub fn create_names(&mut self, heap: &mut Heap) {
         for name in [
             "clock", "sqrt", "input", "float", "int", "str", "type", "getattr", "setattr", "hasattr",
-            "delattr", "rng",
+            "delattr", "rng", "printi"
         ] {
             let string_id = heap.add_string(name.to_string());
             self.string_ids.insert(name.to_string(), string_id);
@@ -241,6 +250,7 @@ impl NativeFunctions {
         vm.define_native(self.string_ids["int"], 1, to_int_native);
         vm.define_native(self.string_ids["str"], 1, to_string_native);
         vm.define_native(self.string_ids["type"], 1, type_native);
+        vm.define_native(self.string_ids["printi"], 1, print_native);
         vm.define_native(self.string_ids["getattr"], 2, getattr_native);
         vm.define_native(self.string_ids["setattr"], 3, setattr_native);
         vm.define_native(self.string_ids["hasattr"], 2, hasattr_native);
