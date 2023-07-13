@@ -8,7 +8,7 @@ use derivative::Derivative;
 use slotmap::{new_key_type, HopSlotMap as SlotMap, Key};
 use std::fmt::{Debug, Display};
 
-use crate::value::{Function, Upvalue, Value};
+use crate::value::{Function, Upvalue, Value, Number};
 
 pub trait ArenaValue: Debug + Display + PartialEq {}
 impl<T> ArenaValue for T where T: Debug + Display + PartialEq {}
@@ -187,7 +187,8 @@ pub struct BuiltinConstants {
     pub true_: ValueId,
     pub false_: ValueId,
     pub init_string: StringId,
-    pub numbers: Vec<ValueId>,
+    pub integers: Vec<ValueId>,
+    pub floats: Vec<ValueId>,
 }
 
 impl BuiltinConstants {
@@ -198,8 +199,11 @@ impl BuiltinConstants {
             true_: heap.add_value(Value::Bool(true)),
             false_: heap.add_value(Value::Bool(false)),
             init_string: heap.add_string("init".to_string()),
-            numbers: (0..1024)
-                .map(|n| heap.add_value(Value::Number(n.into())))
+            integers: (0..1024)
+                .map(|n| heap.add_value(Value::Number(Number::Integer(n))))
+                .collect(),
+                floats: (0..1024)
+                .map(|n| heap.add_value(Value::Number(Number::Float(n.into()))))
                 .collect(),
         }
     }
@@ -212,12 +216,18 @@ impl BuiltinConstants {
         }
     }
 
-    pub fn number(&self, n: f64) -> Option<ValueId> {
-        if n.fract() != 0.0 || n.is_nan() || n.is_infinite() || n.signum() < 0.0 {
-            None
-        } else {
-            self.numbers.get(n as usize).copied()
+    pub fn number(&self, n: Number) -> Option<ValueId> {
+        match n {
+            Number::Integer(i) => self.integers.get(i as usize).copied(),
+            Number::Float(f) => {
+                if f.fract() != 0.0 || f.is_nan() || f.is_infinite() || f.signum() < 0.0 {
+                    None
+                } else {
+                    self.floats.get(f as usize).copied()
+                }
+            }
         }
+
     }
 }
 
@@ -284,7 +294,10 @@ impl Heap {
             &self.builtin_constants().init_string.clone(),
             self.black_value,
         );
-        for number in self.builtin_constants().numbers.clone() {
+        for number in self.builtin_constants().integers.clone() {
+            self.values.mark(&number, self.black_value);
+        }
+        for number in self.builtin_constants().floats.clone() {
             self.values.mark(&number, self.black_value);
         }
     }

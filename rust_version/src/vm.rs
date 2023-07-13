@@ -6,7 +6,7 @@ use rustc_hash::FxHashMap as HashMap;
 use crate::chunk::InstructionDisassembler;
 use crate::heap::{FunctionId, ValueId};
 use crate::native_functions::NativeFunctions;
-use crate::value::{Class, Closure, Instance, Upvalue};
+use crate::value::{Class, Closure, Instance, Upvalue, Number};
 use crate::{
     chunk::{CodeOffset, OpCode},
     compiler::Compiler,
@@ -42,7 +42,7 @@ macro_rules! binary_op {
     }
 }
 
-type BinaryOp<T> = fn(f64, f64) -> T;
+type BinaryOp<T> = fn(Number, Number) -> T;
 
 struct Global {
     value: ValueId,
@@ -593,7 +593,8 @@ impl VM {
             .stack
             .last()
             .expect("stack underflow in OP_JUMP_IF_FALSE")
-            .is_falsey() ^ if_true
+            .is_falsey()
+            ^ if_true
         {
             self.callstack.current_mut().ip += offset;
         }
@@ -639,10 +640,10 @@ impl VM {
         let value_id = *self.peek(0).expect("stack underflow in OP_NEGATE");
         let value = &self.heap.values[&value_id];
         match value {
-            Value::Number(n) =>{
+            Value::Number(n) => {
                 self.stack.pop();
                 self.stack_push_value((-*n).into());
-            },
+            }
             _ => {
                 runtime_error!(self, "Operand must be a number.");
                 return Some(InterpretResult::RuntimeError);
@@ -674,7 +675,7 @@ impl VM {
 
         // There is one case where equality-by-reference does not imply *actual* equality: NaN
         let value = match (left, right) {
-            (Value::Number(left), Value::Number(right)) if left.is_nan() && right.is_nan() => false,
+            (Value::Number(Number::Float(left)), Value::Number(Number::Float(right))) if left.is_nan() && right.is_nan() => false,
             (left, right) => left_id == right_id || left == right,
         };
 

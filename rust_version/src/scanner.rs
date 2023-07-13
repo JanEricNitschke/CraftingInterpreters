@@ -38,6 +38,7 @@ pub enum TokenKind {
     Identifier,
     String,
     Number,
+    Integer,
 
     // Keywords.
     And,
@@ -222,6 +223,8 @@ impl<'a> Scanner<'a> {
             self.advance();
         }
 
+
+
         // Fractions
         if self.peek() == Some(&b'.')
             && self
@@ -233,6 +236,8 @@ impl<'a> Scanner<'a> {
             while self.peek().map(|c| c.is_ascii_digit()).unwrap_or(false) {
                 self.advance();
             }
+        } else {
+            return  self.make_token(TokenKind::Integer);
         }
 
         self.make_token(TokenKind::Number)
@@ -294,7 +299,7 @@ impl<'a> Scanner<'a> {
                 Some(b'n') => match self.source.get(self.start + 2) {
                     Some(b'l') => self.check_keyword(3, "ess", TokenKind::Unless),
                     Some(b't') => self.check_keyword(3, "il", TokenKind::Until),
-                    _ => TokenKind::Identifier,
+                    _ => TokenKind::Identifier
                 },
                 _  => TokenKind::Identifier
             }

@@ -6,7 +6,7 @@ use rustc_hash::FxHashMap as HashMap;
 use crate::{
     compiler::Compiler,
     heap::{Heap, StringId, ValueId},
-    value::Value,
+    value::{Number, Value},
     vm::VM,
 };
 
@@ -15,13 +15,15 @@ fn clock_native(heap: &mut Heap, _args: &[&ValueId]) -> Result<ValueId, String> 
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_secs_f64(),
+            .as_secs_f64()
+            .into(),
     )))
 }
 
 fn sqrt_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     match &heap.values[args[0]] {
-        Value::Number(n) => Ok(heap.add_value(n.sqrt().into())),
+        Value::Number(Number::Float(n)) => Ok(heap.add_value(n.sqrt().into())),
+        Value::Number(Number::Integer(n)) => Ok(heap.add_value((*n as f64).sqrt().into())),
         x => Err(format!("'sqrt' expected numeric argument, got: {}", *x)),
     }
 }
@@ -43,23 +45,45 @@ fn input_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     }
 }
 
-fn to_number_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
+fn to_float_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     match &heap.values[args[0]] {
         Value::String(string_id) => {
             let string = &heap.strings[string_id];
             let converted: Result<f64, _> = string.parse();
             match converted {
-                Ok(result) => Ok(heap.add_value(Value::Number(result))),
+                Ok(result) => Ok(heap.add_value(Value::Number(result.into()))),
                 Err(_) => Err(format!(
-                    "'number' could not convert string '{}' to a number.",
+                    "'float' could not convert string '{}' to a float.",
                     string
                 )),
             }
         }
-        value @ Value::Number(_) => Ok(heap.add_value(value.clone())),
-        Value::Bool(value) => Ok(heap.add_value(Value::Number(f64::from(*value)))),
+        Value::Number(n) => Ok(heap.add_value(Value::Number(f64::from(*n).into()))),
+        Value::Bool(value) => Ok(heap.add_value(Value::Number(f64::from(*value).into()))),
         x => Err(format!(
-            "'number' expected string, number or bool argument, got: {}",
+            "'float' expected string, number or bool argument, got: {}",
+            x
+        )),
+    }
+}
+
+fn to_int_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
+    match &heap.values[args[0]] {
+        Value::String(string_id) => {
+            let string = &heap.strings[string_id];
+            let converted: Result<i64, _> = string.parse();
+            match converted {
+                Ok(result) => Ok(heap.add_value(Value::Number(result.into()))),
+                Err(_) => Err(format!(
+                    "'int' could not convert string '{}' to an integer.",
+                    string
+                )),
+            }
+        }
+        Value::Number(n) => Ok(heap.add_value(Value::Number(i64::from(*n).into()))),
+        Value::Bool(value) => Ok(heap.add_value(Value::Number(i64::from(*value).into()))),
+        x => Err(format!(
+            "'int' expected string, number or bool argument, got: {}",
             x
         )),
     }
@@ -157,7 +181,7 @@ impl NativeFunctions {
 
     pub fn create_names(&mut self, heap: &mut Heap) {
         for name in [
-            "clock", "sqrt", "input", "number", "getattr", "setattr", "hasattr", "delattr",
+            "clock", "sqrt", "input", "float", "int", "getattr", "setattr", "hasattr", "delattr",
         ] {
             let string_id = heap.add_string(name.to_string());
             self.string_ids.insert(name.to_string(), string_id);
@@ -172,7 +196,8 @@ impl NativeFunctions {
         vm.define_native(self.string_ids["clock"], 0, clock_native);
         vm.define_native(self.string_ids["sqrt"], 1, sqrt_native);
         vm.define_native(self.string_ids["input"], 1, input_native);
-        vm.define_native(self.string_ids["number"], 1, to_number_native);
+        vm.define_native(self.string_ids["float"], 1, to_float_native);
+        vm.define_native(self.string_ids["int"], 1, to_int_native);
         vm.define_native(self.string_ids["getattr"], 2, getattr_native);
         vm.define_native(self.string_ids["setattr"], 3, setattr_native);
         vm.define_native(self.string_ids["hasattr"], 2, hasattr_native);

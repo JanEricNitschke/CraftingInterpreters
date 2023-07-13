@@ -61,7 +61,7 @@ macro_rules! make_rules {
     }};
 }
 
-pub(super) type Rules<'scanner, 'arena> = [Rule<'scanner, 'arena>; 49];
+pub(super) type Rules<'scanner, 'arena> = [Rule<'scanner, 'arena>; 50];
 
 // Can't be static because the associated function types include lifetimes
 #[rustfmt::skip]
@@ -91,6 +91,7 @@ pub(super) fn make_rules<'scanner, 'arena>() -> Rules<'scanner, 'arena> {
         Identifier   = [variable, None,   None      ],
         String       = [string,   None,   None      ],
         Number       = [number,   None,   None      ],
+        Integer      = [integer,  None,   None      ],
         And          = [None,     and,    And       ],
         Case         = [None,     None,   None      ],
         Class        = [None,     None,   None      ],
@@ -235,6 +236,11 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
 
     fn number(&mut self, _can_assign: bool) {
         let value: f64 = self.previous.as_ref().unwrap().as_str().parse().unwrap();
+        self.emit_constant(value);
+    }
+
+    fn integer(&mut self, _can_assign: bool) {
+        let value: i64 = self.previous.as_ref().unwrap().as_str().parse().unwrap();
         self.emit_constant(value);
     }
 

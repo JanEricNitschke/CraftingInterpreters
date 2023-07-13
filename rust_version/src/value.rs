@@ -1,16 +1,16 @@
-use derivative::Derivative;
-use rustc_hash::FxHashMap as HashMap;
-
 use crate::{
     chunk::Chunk,
     heap::{FunctionId, Heap, StringId, ValueId},
 };
+use derivative::Derivative;
+use derive_more::{From, Neg};
+use rustc_hash::FxHashMap as HashMap;
 
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum Value {
     Bool(bool),
     Nil,
-    Number(f64),
+    Number(Number),
 
     String(StringId),
 
@@ -23,6 +23,88 @@ pub enum Value {
     Class(Class),
     Instance(Instance),
     BoundMethod(BoundMethod),
+}
+
+#[derive(Debug, Copy, PartialEq, PartialOrd, Clone, From, Neg)]
+pub enum Number {
+    Float(f64),
+    Integer(i64),
+}
+
+impl From<Number> for f64 {
+    fn from(n: Number) -> Self {
+        match n {
+            Number::Float(n) => n,
+            Number::Integer(n) => n as f64,
+        }
+    }
+}
+
+impl From<Number> for i64 {
+    fn from(n: Number) -> Self {
+        match n {
+            Number::Float(n) => n as i64,
+            Number::Integer(n) => n,
+        }
+    }
+}
+
+impl std::fmt::Display for Number {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Number::Float(num) => f.pad(&format!("{:?}", num)),
+            Number::Integer(num) => f.pad(&format!("{}", num)),
+
+        }
+    }
+}
+
+impl ::core::ops::Add for Number {
+    type Output = Number;
+    fn add(self, rhs: Number) -> Number {
+        match (self, rhs) {
+            (Number::Integer(a), Number::Integer(b)) => Number::Integer(a + b),
+            (Number::Float(a), Number::Integer(b)) => Number::Float(a + b as f64),
+            (Number::Integer(a), Number::Float(b)) => Number::Float(a as f64 + b),
+            (Number::Float(a), Number::Float(b)) => Number::Float(a + b),
+        }
+    }
+}
+
+impl ::core::ops::Sub for Number {
+    type Output = Number;
+    fn sub(self, rhs: Number) -> Number {
+        match (self, rhs) {
+            (Number::Integer(a), Number::Integer(b)) => Number::Integer(a - b),
+            (Number::Float(a), Number::Integer(b)) => Number::Float(a - b as f64),
+            (Number::Integer(a), Number::Float(b)) => Number::Float(a as f64 - b),
+            (Number::Float(a), Number::Float(b)) => Number::Float(a - b),
+        }
+    }
+}
+
+impl ::core::ops::Mul for Number {
+    type Output = Number;
+    fn mul(self, rhs: Number) -> Number {
+        match (self, rhs) {
+            (Number::Integer(a), Number::Integer(b)) => Number::Integer(a * b),
+            (Number::Float(a), Number::Integer(b)) => Number::Float(a * b as f64),
+            (Number::Integer(a), Number::Float(b)) => Number::Float(a as f64 * b),
+            (Number::Float(a), Number::Float(b)) => Number::Float(a * b),
+        }
+    }
+}
+
+impl ::core::ops::Div for Number {
+    type Output = Number;
+    fn div(self, rhs: Number) -> Number {
+        match (self, rhs) {
+            (Number::Integer(a), Number::Integer(b)) => Number::Float(a as f64 / b as f64),
+            (Number::Float(a), Number::Integer(b)) => Number::Float(a / b as f64),
+            (Number::Integer(a), Number::Float(b)) => Number::Float(a as f64 / b),
+            (Number::Float(a), Number::Float(b)) => Number::Float(a / b),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
@@ -88,7 +170,13 @@ impl From<bool> for Value {
 
 impl From<f64> for Value {
     fn from(f: f64) -> Self {
-        Value::Number(f)
+        Value::Number(f.into())
+    }
+}
+
+impl From<i64> for Value {
+    fn from(f: i64) -> Self {
+        Value::Number(f.into())
     }
 }
 
@@ -119,6 +207,12 @@ impl From<Class> for Value {
 impl From<Instance> for Value {
     fn from(i: Instance) -> Self {
         Value::Instance(i)
+    }
+}
+
+impl From<Number> for Value {
+    fn from(n: Number) -> Self {
+        Value::Number(n)
     }
 }
 
