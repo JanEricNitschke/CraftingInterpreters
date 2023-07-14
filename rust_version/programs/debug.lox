@@ -1,7 +1,16 @@
-var a = 5;
-print(a); # expect: 5
-a = 6;
-print(a); # expect: 6
-a *= 2;
-print(a); # expect: 12
-a *= "Test";
+
+
+#var my_list = [1, 2, 3];
+#print(my_list);
+#append(my_list, 4);
+#print(my_list);
+
+
+
+var list = Array();
+#print(list);
+#list.stuff = "stuff";
+#print(list.stuff);
+var a = list.append;
+print(a);
+a("1");

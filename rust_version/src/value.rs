@@ -17,6 +17,7 @@ pub enum Value {
     Function(FunctionId),
     Closure(Closure),
     NativeFunction(NativeFunction),
+    NativeMethod(NativeMethod),
 
     Upvalue(Upvalue),
 
@@ -73,9 +74,9 @@ impl Number {
     pub fn floor_div(self, exp: Number) -> Number {
         match (self, exp) {
             (Number::Integer(a), Number::Integer(b)) => Number::Integer(a / b),
-            (Number::Float(a), Number::Integer(b)) => Number::Float((a/(b as f64)).floor()),
-            (Number::Integer(a), Number::Float(b)) => Number::Float(((a as f64)/b).floor()),
-            (Number::Float(a), Number::Float(b)) => Number::Float((a/b).floor()),
+            (Number::Float(a), Number::Integer(b)) => Number::Float((a / (b as f64)).floor()),
+            (Number::Integer(a), Number::Float(b)) => Number::Float(((a as f64) / b).floor()),
+            (Number::Float(a), Number::Float(b)) => Number::Float((a / b).floor()),
         }
     }
 }
@@ -128,8 +129,6 @@ impl ::core::ops::Mul for Number {
     }
 }
 
-
-
 impl ::core::ops::BitAnd for Number {
     type Output = Number;
     fn bitand(self, rhs: Number) -> Number {
@@ -171,8 +170,6 @@ impl ::core::ops::Rem for Number {
         }
     }
 }
-
-
 
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum Upvalue {
@@ -227,6 +224,7 @@ impl Value {
     pub fn bound_method(receiver: ValueId, method: ValueId) -> Value {
         Value::BoundMethod(BoundMethod { receiver, method })
     }
+
 }
 
 impl From<bool> for Value {
@@ -298,7 +296,11 @@ impl std::fmt::Display for Value {
             Value::String(s) => f.pad(s),
             Value::Function(function_id) => f.pad(&format!("<fn {}>", *function_id.name)),
             Value::Closure(closure) => f.pad(&format!("<fn {}>", *closure.function.name)),
-            Value::NativeFunction(fun) => f.pad(&format!("<native fn {}>", fun.name)),
+            Value::NativeFunction(fun) => f.pad(&format!("<native fn {}>", *fun.name)),
+            Value::NativeMethod(method) => f.pad(&format!(
+                "<native method {} of class {}>",
+                *method.name, *method.class
+            )),
             Value::Upvalue(_) => f.pad("upvalue"),
             Value::Class(c) => f.pad(&format!("<class {}>", *c.name)),
             Value::Instance(instance) => f.pad(&format!(
@@ -308,14 +310,14 @@ impl std::fmt::Display for Value {
             Value::BoundMethod(method) => f.pad(&format!(
                 "<bound method {}.{} of {}>",
                 *method.receiver.as_instance().class.as_class().name,
-                *method.method.as_closure().function.name,
-                *method.receiver
+                *method.method_name(),
+                *method.receiver,
             )),
             Value::List(list) => f.pad(&{
                 let mapped = list
                     .items
                     .iter()
-                    .map(|value_id| unsafe { &value_id.arena.as_ref()[value_id] })
+                    .map(|value_id| *value_id)
                     .collect::<Vec<_>>();
 
                 let mut comma_separated = String::new();
@@ -344,6 +346,13 @@ impl Value {
         match self {
             Value::Closure(c) => c,
             _ => unreachable!("Expected Closure, found `{}`", self),
+        }
+    }
+
+    pub fn as_native_method(&self) -> &NativeMethod {
+        match self {
+            Value::NativeMethod(n) => n,
+            _ => unreachable!("Expected Native, found `{}`", self),
         }
     }
 
@@ -426,7 +435,7 @@ impl Function {
 #[derive(Derivative)]
 #[derivative(Debug, PartialEq, PartialOrd, Clone)]
 pub struct NativeFunction {
-    pub name: String,
+    pub name: StringId,
     pub arity: &'static [u8],
 
     #[derivative(
@@ -436,6 +445,52 @@ pub struct NativeFunction {
             PartialOrd = "ignore"
         )]
     pub fun: NativeFunctionImpl,
+}
+
+#[derive(Derivative)]
+#[derivative(Debug, PartialEq, PartialOrd, Clone)]
+pub struct NativeMethod {
+    pub class: StringId,
+    pub name: StringId,
+    pub arity: &'static [u8],
+
+    #[derivative(
+            Debug = "ignore",
+            // Treat the implementation as always equal; we discriminate built-in functions by name
+            PartialEq(compare_with = "always_equals"),
+            PartialOrd = "ignore"
+        )]
+    pub fun: NativeFunctionImpl,
+}
+
+pub(super) trait NativeCallable {
+    fn fun(&self) -> NativeFunctionImpl;
+    fn arity(&self) -> &'static [u8];
+    fn name(&self) -> StringId;
+}
+
+impl NativeCallable for NativeFunction {
+    fn fun(&self) -> NativeFunctionImpl {
+        self.fun
+    }
+    fn arity(&self) -> &'static [u8] {
+        self.arity
+    }
+    fn name(&self) -> StringId {
+        self.name
+    }
+}
+
+impl NativeCallable for NativeMethod {
+    fn fun(&self) -> NativeFunctionImpl {
+        self.fun
+    }
+    fn arity(&self) -> &'static [u8] {
+        self.arity
+    }
+    fn name(&self) -> StringId {
+        self.name
+    }
 }
 
 pub type NativeFunctionImpl = fn(&mut Heap, &[&ValueId]) -> Result<ValueId, String>;
@@ -450,14 +505,16 @@ pub struct Class {
     pub name: StringId,
     #[derivative(PartialOrd = "ignore")]
     pub methods: HashMap<StringId, ValueId>,
+    pub is_native: bool,
 }
 
 impl Class {
     #[must_use]
-    pub fn new(name: StringId) -> Self {
+    pub fn new(name: StringId, is_native: bool) -> Self {
         Class {
             name,
             methods: HashMap::default(),
+            is_native,
         }
     }
 }
@@ -484,6 +541,17 @@ impl Instance {
 pub struct BoundMethod {
     pub receiver: ValueId,
     pub method: ValueId,
+}
+
+impl BoundMethod {
+    fn method_name(&self) -> StringId {
+        let method = &*self.method.clone();
+        match method {
+            Value::NativeMethod(native) => native.name,
+            Value::Closure(closure) => closure.function.name,
+            x => unreachable!("Bound method only binds over closures or native methods, got `{}` instead.", x)
+        }
+    }
 }
 
 impl PartialEq for BoundMethod {

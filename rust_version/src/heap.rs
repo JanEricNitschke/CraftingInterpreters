@@ -348,6 +348,7 @@ impl Heap {
             | Value::Nil
             | Value::Number(_)
             | Value::NativeFunction(_)
+            | Value::NativeMethod(_)
             | Value::Upvalue(Upvalue::Open(_)) => {}
             Value::String(string_id) => self.strings.gray.push(string_id.id),
             Value::Function(function_id) => self.functions.gray.push(function_id.id),

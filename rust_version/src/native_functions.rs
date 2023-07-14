@@ -109,6 +109,9 @@ fn type_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
         Value::NativeFunction(_) => {
             Value::String(heap.add_string("<type native function>".to_string()))
         }
+        Value::NativeMethod(_) => {
+            Value::String(heap.add_string("<type native method>".to_string()))
+        }
         Value::Nil => Value::String(heap.add_string("<type nil>".to_string())),
         Value::Number(n) => match n {
             Number::Float(_) => Value::String(heap.add_string("<type float>".to_string())),
@@ -165,6 +168,7 @@ fn append_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> 
         )),
     }
 }
+
 
 fn pop_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     let index = if args.len() == 1 {
@@ -354,11 +358,11 @@ fn delattr_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String>
     }
 }
 
-pub struct NativeFunctions {
+pub struct Natives {
     string_ids: HashMap<String, StringId>,
 }
 
-impl NativeFunctions {
+impl Natives {
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -369,7 +373,7 @@ impl NativeFunctions {
     pub fn create_names(&mut self, heap: &mut Heap) {
         for name in [
             "clock", "sqrt", "input", "float", "int", "str", "type", "getattr", "setattr",
-            "hasattr", "delattr", "rng", "print", "append", "pop", "insert", "len"
+            "hasattr", "delattr", "rng", "print", "append", "pop", "insert", "len", "Array",
         ] {
             let string_id = heap.add_string(name.to_string());
             self.string_ids.insert(name.to_string(), string_id);
@@ -380,23 +384,26 @@ impl NativeFunctions {
         compiler.inject_strings(&self.string_ids);
     }
 
-    pub fn define_functions(&self, vm: &mut VM) {
-        vm.define_native(self.string_ids["clock"], &[0], clock_native);
-        vm.define_native(self.string_ids["sqrt"], &[1], sqrt_native);
-        vm.define_native(self.string_ids["input"], &[1], input_native);
-        vm.define_native(self.string_ids["float"], &[1], to_float_native);
-        vm.define_native(self.string_ids["int"], &[1], to_int_native);
-        vm.define_native(self.string_ids["str"], &[1], to_string_native);
-        vm.define_native(self.string_ids["type"], &[1], type_native);
-        vm.define_native(self.string_ids["print"], &[1, 2], print_native);
-        vm.define_native(self.string_ids["getattr"], &[2], getattr_native);
-        vm.define_native(self.string_ids["setattr"], &[3], setattr_native);
-        vm.define_native(self.string_ids["hasattr"], &[2], hasattr_native);
-        vm.define_native(self.string_ids["delattr"], &[2], delattr_native);
-        vm.define_native(self.string_ids["rng"], &[2], rng_native);
-        vm.define_native(self.string_ids["append"], &[2], append_native);
-        vm.define_native(self.string_ids["pop"], &[1, 2], pop_native);
-        vm.define_native(self.string_ids["insert"], &[3], insert_native);
-        vm.define_native(self.string_ids["len"], &[1], len_native);
+    pub fn define_natives(&self, vm: &mut VM) {
+        vm.define_native_function(self.string_ids["clock"], &[0], clock_native);
+        vm.define_native_function(self.string_ids["sqrt"], &[1], sqrt_native);
+        vm.define_native_function(self.string_ids["input"], &[1], input_native);
+        vm.define_native_function(self.string_ids["float"], &[1], to_float_native);
+        vm.define_native_function(self.string_ids["int"], &[1], to_int_native);
+        vm.define_native_function(self.string_ids["str"], &[1], to_string_native);
+        vm.define_native_function(self.string_ids["type"], &[1], type_native);
+        vm.define_native_function(self.string_ids["print"], &[1, 2], print_native);
+        vm.define_native_function(self.string_ids["getattr"], &[2], getattr_native);
+        vm.define_native_function(self.string_ids["setattr"], &[3], setattr_native);
+        vm.define_native_function(self.string_ids["hasattr"], &[2], hasattr_native);
+        vm.define_native_function(self.string_ids["delattr"], &[2], delattr_native);
+        vm.define_native_function(self.string_ids["rng"], &[2], rng_native);
+        vm.define_native_function(self.string_ids["append"], &[2], append_native);
+        vm.define_native_function(self.string_ids["pop"], &[1, 2], pop_native);
+        vm.define_native_function(self.string_ids["insert"], &[3], insert_native);
+        vm.define_native_function(self.string_ids["len"], &[1], len_native);
+
+        vm.define_native_class(self.string_ids["Array"]);
+        vm.define_native_method(self.string_ids["Array"], self.string_ids["append"], &[2], append_native);
     }
 }
