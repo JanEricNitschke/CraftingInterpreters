@@ -90,6 +90,7 @@ pub enum OpCode {
     Print,
     Pop,
     Dup,
+    DupN,
 
     Return,
 
@@ -242,7 +243,7 @@ impl<'chunk> InstructionDisassembler<'chunk> {
                 | Pop | Dup | CloseUpvalue | Inherit | IndexSubscript | StoreSubscript => 0,
                 Constant | GetLocal | SetLocal | GetGlobal | SetGlobal | DefineGlobal
                 | DefineGlobalConst | Call | Return | GetUpvalue | SetUpvalue | Class
-                | GetProperty | SetProperty | Method | GetSuper | BuildList => 1,
+                | GetProperty | SetProperty | Method | GetSuper | BuildList | DupN => 1,
                 Jump | JumpIfFalse | JumpIfTrue | Loop | Invoke | SuperInvoke => 2,
                 ConstantLong
                 | GetGlobalLong
@@ -469,7 +470,7 @@ impl<'chunk> std::fmt::Debug for InstructionDisassembler<'chunk> {
                 SetGlobalLong,
             ),
             closure(Closure),
-            byte(Call, GetUpvalue, SetUpvalue, Class, GetLocal, SetLocal, BuildList),
+            byte(Call, GetUpvalue, SetUpvalue, Class, GetLocal, SetLocal, BuildList, DupN),
             byte_long(GetLocalLong, SetLocalLong),
             jump(Jump, JumpIfFalse, JumpIfTrue, Loop),
             invoke(Invoke, SuperInvoke),

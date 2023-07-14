@@ -163,7 +163,17 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
                 infix_rule(self, can_assign);
             }
 
-            if can_assign && self.match_(TK::Equal) {
+            if can_assign
+                && (self.match_(TK::Equal)
+                    | self.match_(TK::PlusEqual)
+                    | self.match_(TK::MinusEqual)
+                    | self.match_(TK::StarEqual)
+                    | self.match_(TK::SlashEqual)
+                    | self.match_(TK::HatEqual)
+                    | self.match_(TK::PipeEqual)
+                    | self.match_(TK::AmperEqual)
+                    | self.match_(TK::PercentEqual))
+            {
                 self.error("Invalid assignment target.")
             }
         } else {
@@ -224,8 +234,39 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         let name_constant =
             self.identifier_constant(self.previous.as_ref().unwrap().as_str().to_string());
         let line = self.line();
-        if can_assign && self.match_(TK::Equal) {
-            self.expression();
+        if can_assign
+            && (self.match_(TK::Equal)
+                | self.match_(TK::PlusEqual)
+                | self.match_(TK::MinusEqual)
+                | self.match_(TK::StarEqual)
+                | self.match_(TK::SlashEqual)
+                | self.match_(TK::HatEqual)
+                | self.match_(TK::PipeEqual)
+                | self.match_(TK::AmperEqual)
+                | self.match_(TK::PercentEqual))
+        {
+            let previous_kind = self.previous.as_ref().unwrap().kind;
+            if !matches!(previous_kind, TK::Equal) {
+                self.emit_byte(OpCode::Dup, line);
+                self.emit_byte(OpCode::GetProperty, line);
+                if !self.emit_number(name_constant.0, false) {
+                    self.error("Too many constants created for OP_GET_PROPERTY.");
+                }
+                self.expression();
+                match previous_kind {
+                    TK::PlusEqual => self.emit_byte(OpCode::Add, line),
+                    TK::MinusEqual => self.emit_byte(OpCode::Subtract, line),
+                    TK::StarEqual => self.emit_byte(OpCode::Multiply, line),
+                    TK::SlashEqual => self.emit_byte(OpCode::Divide, line),
+                    TK::HatEqual => self.emit_byte(OpCode::BitXor, line),
+                    TK::PipeEqual => self.emit_byte(OpCode::BitOr, line),
+                    TK::AmperEqual => self.emit_byte(OpCode::BitAnd, line),
+                    TK::PercentEqual => self.emit_byte(OpCode::Mod, line),
+                    _ => unreachable!("Unexpected byte code "),
+                }
+            } else {
+                self.expression();
+            }
             self.emit_byte(OpCode::SetProperty, line);
             if !self.emit_number(name_constant.0, false) {
                 self.error("Too many constants created for OP_SET_PROPERTY");
@@ -305,12 +346,40 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
     fn subscript(&mut self, can_assign: bool) {
         self.parse_precedence(Precedence::Or);
         self.consume(TK::RightBracket, "Expect ']' after index.");
-
-        if can_assign && self.match_(TK::Equal) {
-            self.expression();
-            self.emit_byte(OpCode::StoreSubscript, self.line());
+        let line = self.line();
+        if can_assign
+            && (self.match_(TK::Equal)
+                | self.match_(TK::PlusEqual)
+                | self.match_(TK::MinusEqual)
+                | self.match_(TK::StarEqual)
+                | self.match_(TK::SlashEqual)
+                | self.match_(TK::HatEqual)
+                | self.match_(TK::PipeEqual)
+                | self.match_(TK::AmperEqual)
+                | self.match_(TK::PercentEqual))
+        {
+            let previous_kind = self.previous.as_ref().unwrap().kind;
+            if !matches!(previous_kind, TK::Equal) {
+                self.emit_bytes(OpCode::DupN, 2, line);
+                self.emit_byte(OpCode::IndexSubscript, line);
+                self.expression();
+                match previous_kind {
+                    TK::PlusEqual => self.emit_byte(OpCode::Add, line),
+                    TK::MinusEqual => self.emit_byte(OpCode::Subtract, line),
+                    TK::StarEqual => self.emit_byte(OpCode::Multiply, line),
+                    TK::SlashEqual => self.emit_byte(OpCode::Divide, line),
+                    TK::HatEqual => self.emit_byte(OpCode::BitXor, line),
+                    TK::PipeEqual => self.emit_byte(OpCode::BitOr, line),
+                    TK::AmperEqual => self.emit_byte(OpCode::BitAnd, line),
+                    TK::PercentEqual => self.emit_byte(OpCode::Mod, line),
+                    _ => unreachable!("Unexpected byte code "),
+                }
+            } else {
+                self.expression();
+            }
+            self.emit_byte(OpCode::StoreSubscript, line);
         } else {
-            self.emit_byte(OpCode::IndexSubscript, self.line());
+            self.emit_byte(OpCode::IndexSubscript, line);
         }
     }
 

@@ -184,7 +184,7 @@ impl VM {
                 let mut disassembler = InstructionDisassembler::new(&function.chunk);
                 *disassembler.offset = self.callstack.current().ip;
                 println!(
-                    "          [ { }]",
+                    "          [ { } ]",
                     self.stack
                         .iter()
                         .map(|v| format!("{}", self.heap.values[v]))
@@ -208,6 +208,21 @@ impl VM {
                     self.stack_push_value(
                         self.heap.values[self.peek(0).expect("stack underflow in OP_DUP")].clone(),
                     );
+                }
+                OpCode::DupN => {
+                    // -1 because Dup1 should peek at the top most elemnt
+                    let depth = usize::from(self.read_byte())-1;
+                    for _ in (0..=depth).rev() {
+                        // Always look at depth because each iteration pushes an
+                        // additional item onto the stack.
+                        // So for N = 2
+                        // 1 2 3 4 (depth = 1) -> grab 3
+                        // 1 2 3 4 3 (again depth = 1) -> grab 4
+                        // 1 2 3 4 3 4
+                        self.stack_push_value(
+                            self.heap.values[self.peek(depth).expect("stack underflow in OP_DUP")].clone(),
+                        );
+                    }
                 }
                 op @ (OpCode::GetLocal | OpCode::GetLocalLong) => self.get_local(op),
                 op @ (OpCode::SetLocal | OpCode::SetLocalLong) => self.set_local(op),

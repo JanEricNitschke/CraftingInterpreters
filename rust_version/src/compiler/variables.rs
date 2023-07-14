@@ -83,8 +83,38 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         };
 
         // Get or set?
-        let op = if can_assign && self.match_(TK::Equal) {
-            self.expression();
+        let op = if can_assign
+            && (self.match_(TK::Equal)
+                | self.match_(TK::PlusEqual)
+                | self.match_(TK::MinusEqual)
+                | self.match_(TK::StarEqual)
+                | self.match_(TK::SlashEqual)
+                | self.match_(TK::HatEqual)
+                | self.match_(TK::PipeEqual)
+                | self.match_(TK::AmperEqual)
+                | self.match_(TK::PercentEqual))
+        {
+            let previous_kind = self.previous.as_ref().unwrap().kind;
+            if !matches!(previous_kind, TK::Equal) {
+                self.emit_byte(get_op, line);
+                if !self.emit_number(arg, long) {
+                    self.error(&format!("Too many globals in {:?}", get_op));
+                }
+                self.expression();
+                match previous_kind {
+                    TK::PlusEqual => self.emit_byte(OpCode::Add, line),
+                    TK::MinusEqual => self.emit_byte(OpCode::Subtract, line),
+                    TK::StarEqual => self.emit_byte(OpCode::Multiply, line),
+                    TK::SlashEqual => self.emit_byte(OpCode::Divide, line),
+                    TK::HatEqual => self.emit_byte(OpCode::BitXor, line),
+                    TK::PipeEqual => self.emit_byte(OpCode::BitOr, line),
+                    TK::AmperEqual => self.emit_byte(OpCode::BitAnd, line),
+                    TK::PercentEqual => self.emit_byte(OpCode::Mod, line),
+                    _ => unreachable!("Unexpected byte code "),
+                }
+            } else {
+                self.expression();
+            }
             if set_op == OpCode::SetLocal || set_op == OpCode::SetLocalLong {
                 self.check_local_const(arg);
             }
