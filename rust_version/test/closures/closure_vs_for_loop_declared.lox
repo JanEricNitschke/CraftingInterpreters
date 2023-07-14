@@ -15,5 +15,5 @@ fun main() {
 }
 
 main();
-globalOne();  // expect: 1
-globalTwo();  // expect: 3
+globalOne();  # expect: 1
+globalTwo();  # expect: 3

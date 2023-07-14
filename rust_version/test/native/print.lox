@@ -1,2 +1,2 @@
-print("Some" + str(5) + "string"); // expect: Some5string
-print("Some" + str(5) + "string", " SomeWeirdEnd"); // expect: Some5string SomeWeirdEnd
+print("Some" + str(5) + "string"); # expect: Some5string
+print("Some" + str(5) + "string", " SomeWeirdEnd"); # expect: Some5string SomeWeirdEnd

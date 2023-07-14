@@ -60,6 +60,38 @@ impl std::fmt::Display for Number {
     }
 }
 
+impl Number {
+    pub fn pow(self, exp: Number) -> Number {
+        match (self, exp) {
+            (Number::Integer(a), Number::Integer(b)) => Number::Integer(a.pow(b as u32)),
+            (Number::Float(a), Number::Integer(b)) => Number::Float(a.powi(b as i32)),
+            (Number::Integer(a), Number::Float(b)) => Number::Float((a as f64).powf(b)),
+            (Number::Float(a), Number::Float(b)) => Number::Float(a.powf(b)),
+        }
+    }
+
+    pub fn floor_div(self, exp: Number) -> Number {
+        match (self, exp) {
+            (Number::Integer(a), Number::Integer(b)) => Number::Integer(a / b),
+            (Number::Float(a), Number::Integer(b)) => Number::Float((a/(b as f64)).floor()),
+            (Number::Integer(a), Number::Float(b)) => Number::Float(((a as f64)/b).floor()),
+            (Number::Float(a), Number::Float(b)) => Number::Float((a/b).floor()),
+        }
+    }
+}
+
+impl ::core::ops::Div for Number {
+    type Output = Number;
+    fn div(self, rhs: Number) -> Number {
+        match (self, rhs) {
+            (Number::Integer(a), Number::Integer(b)) => Number::Float(a as f64 / b as f64),
+            (Number::Float(a), Number::Integer(b)) => Number::Float(a / b as f64),
+            (Number::Integer(a), Number::Float(b)) => Number::Float(a as f64 / b),
+            (Number::Float(a), Number::Float(b)) => Number::Float(a / b),
+        }
+    }
+}
+
 impl ::core::ops::Add for Number {
     type Output = Number;
     fn add(self, rhs: Number) -> Number {
@@ -96,17 +128,51 @@ impl ::core::ops::Mul for Number {
     }
 }
 
-impl ::core::ops::Div for Number {
+
+
+impl ::core::ops::BitAnd for Number {
     type Output = Number;
-    fn div(self, rhs: Number) -> Number {
+    fn bitand(self, rhs: Number) -> Number {
         match (self, rhs) {
-            (Number::Integer(a), Number::Integer(b)) => Number::Float(a as f64 / b as f64),
-            (Number::Float(a), Number::Integer(b)) => Number::Float(a / b as f64),
-            (Number::Integer(a), Number::Float(b)) => Number::Float(a as f64 / b),
-            (Number::Float(a), Number::Float(b)) => Number::Float(a / b),
+            (Number::Integer(a), Number::Integer(b)) => Number::Integer(a & b),
+            _ => unreachable!("Did not get two integers for bitwise and."),
         }
     }
 }
+
+impl ::core::ops::BitOr for Number {
+    type Output = Number;
+    fn bitor(self, rhs: Number) -> Number {
+        match (self, rhs) {
+            (Number::Integer(a), Number::Integer(b)) => Number::Integer(a | b),
+            _ => unreachable!("Did not get two integers for bitwise or."),
+        }
+    }
+}
+
+impl ::core::ops::BitXor for Number {
+    type Output = Number;
+    fn bitxor(self, rhs: Number) -> Number {
+        match (self, rhs) {
+            (Number::Integer(a), Number::Integer(b)) => Number::Integer(a ^ b),
+            _ => unreachable!("Did not get two integers for bitwise xor."),
+        }
+    }
+}
+
+impl ::core::ops::Rem for Number {
+    type Output = Number;
+    fn rem(self, rhs: Number) -> Number {
+        match (self, rhs) {
+            (Number::Integer(a), Number::Integer(b)) => Number::Integer(a % b),
+            (Number::Float(a), Number::Integer(b)) => Number::Float(a % b as f64),
+            (Number::Integer(a), Number::Float(b)) => Number::Float(a as f64 % b),
+            (Number::Float(a), Number::Float(b)) => Number::Float(a % b),
+        }
+    }
+}
+
+
 
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum Upvalue {

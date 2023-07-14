@@ -6,4 +6,4 @@ switch(x * 2) {
     case 12:
         print("omg");
         print(x);
-// Error at end: Expect '}' after 'switch' body.
+# Error at end: Expect '}' after 'switch' body.

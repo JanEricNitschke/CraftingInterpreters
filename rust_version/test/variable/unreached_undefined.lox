@@ -2,4 +2,4 @@ if (false) {
   print(notDefined);
 }
 
-print("ok"); // expect: ok
+print("ok"); # expect: ok

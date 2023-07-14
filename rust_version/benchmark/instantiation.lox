@@ -1,4 +1,4 @@
-// This benchmark stresses instance creation and initializer calling.
+# This benchmark stresses instance creation and initializer calling.
 
 class Foo {
   init() {}
@@ -40,4 +40,4 @@ while (i < 50000) {
   i = i + 1;
 }
 
-// print(clock() - start);
+# print(clock() - start);

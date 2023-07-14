@@ -36,6 +36,8 @@ jobs:
       working-directory: reference/craftinginterpreters
       run: |
         make get
+        # Replace my comment syntax from // to #
+        sed -i 's/Pattern = RegExp(r"\/\//Pattern = RegExp(r"#/g' tool/bin/test.dart
         make
     - name: Run custom dart tests
       working-directory: rust_version

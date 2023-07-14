@@ -1,2 +1,2 @@
-print(float("3.2")); // expect: 3.2
-print(float("13.0")); // expect: 13.0
+print(float("3.2")); # expect: 3.2
+print(float("13.0")); # expect: 13.0

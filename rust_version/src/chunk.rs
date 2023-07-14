@@ -80,6 +80,12 @@ pub enum OpCode {
     Subtract,
     Multiply,
     Divide,
+    BitXor,
+    BitOr,
+    BitAnd,
+    Mod,
+    Exp,
+    FloorDiv,
 
     Print,
     Pop,
@@ -231,9 +237,9 @@ impl<'chunk> InstructionDisassembler<'chunk> {
         use OpCode::*;
         std::mem::size_of::<OpCode>()
             + match opcode {
-                Negate | Add | Subtract | Multiply | Divide | Nil | True | False | Not | Equal
-                | Greater | Less | Print | Pop | Dup | CloseUpvalue | Inherit | IndexSubscript
-                | StoreSubscript => 0,
+                Negate | Add | Subtract | Multiply | Divide | Mod | Exp | FloorDiv | BitAnd
+                | BitOr | BitXor | Nil | True | False | Not | Equal | Greater | Less | Print
+                | Pop | Dup | CloseUpvalue | Inherit | IndexSubscript | StoreSubscript => 0,
                 Constant | GetLocal | SetLocal | GetGlobal | SetGlobal | DefineGlobal
                 | DefineGlobalConst | Call | Return | GetUpvalue | SetUpvalue | Class
                 | GetProperty | SetProperty | Method | GetSuper | BuildList => 1,
@@ -478,6 +484,12 @@ impl<'chunk> std::fmt::Debug for InstructionDisassembler<'chunk> {
                 Inherit,
                 Less,
                 Multiply,
+                BitAnd,
+                BitOr,
+                BitXor,
+                Mod,
+                Exp,
+                FloorDiv,
                 Negate,
                 Nil,
                 Not,

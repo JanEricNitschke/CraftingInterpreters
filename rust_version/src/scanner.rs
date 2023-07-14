@@ -21,10 +21,25 @@ pub enum TokenKind {
     Comma,
     Dot,
     Minus,
+    MinusEqual,
     Plus,
+    PlusEqual,
     Semicolon,
     Slash,
+    SlashEqual,
     Star,
+    StarEqual,
+    Percent,
+    PercentEqual,
+    Pipe,
+    PipeEqual,
+    Amper,
+    AmperEqual,
+    Hat,
+    HatEqual,
+
+    StarStar,
+    SlashSlash,
 
     // One Or Two Character Tokens.
     Bang,
@@ -126,10 +141,70 @@ impl<'a> Scanner<'a> {
                 b';' => TK::Semicolon,
                 b',' => TK::Comma,
                 b'.' => TK::Dot,
-                b'-' => TK::Minus,
-                b'+' => TK::Plus,
-                b'/' => TK::Slash,
-                b'*' => TK::Star,
+                b'-' => {
+                    if self.match_(b'=') {
+                        TK::MinusEqual
+                    } else {
+                        TK::Minus
+                    }
+                }
+                b'+' => {
+                    if self.match_(b'=') {
+                        TK::PlusEqual
+                    } else {
+                        TK::Plus
+                    }
+                }
+                b'/' => {
+                    if self.match_(b'=') {
+                        TK::SlashEqual
+                    } else if self.match_(b'/') {
+                        {
+                            TK::SlashSlash
+                        }
+                    } else {
+                        TK::Slash
+                    }
+                }
+                b'*' => {
+                    if self.match_(b'=') {
+                        TK::StarEqual
+                    } else if self.match_(b'*') {
+                        {
+                            TK::StarStar
+                        }
+                    } else {
+                        TK::Star
+                    }
+                }
+                b'%' => {
+                    if self.match_(b'=') {
+                        TK::PercentEqual
+                    } else {
+                        TK::Percent
+                    }
+                }
+                b'&' => {
+                    if self.match_(b'=') {
+                        TK::AmperEqual
+                    } else {
+                        TK::Amper
+                    }
+                }
+                b'|' => {
+                    if self.match_(b'=') {
+                        TK::PipeEqual
+                    } else {
+                        TK::Pipe
+                    }
+                }
+                b'^' => {
+                    if self.match_(b'=') {
+                        TK::HatEqual
+                    } else {
+                        TK::Hat
+                    }
+                }
                 b'!' => {
                     if self.match_(b'=') {
                         TK::BangEqual
@@ -192,14 +267,14 @@ impl<'a> Scanner<'a> {
                     *self.line += 1;
                     self.advance();
                 }
-                Some(b'/') => {
-                    if self.peek_next() == Some(&b'/') {
+                Some(b'#') => {
+                    // if self.peek_next() == Some(&b'/') {
                         while !matches!(self.peek(), Some(b'\n') | None) {
                             self.advance();
-                        }
-                    } else {
-                        break;
-                    }
+                         }
+                    // } else {
+                    //     break;
+                    // }
                 }
                 _ => break,
             }

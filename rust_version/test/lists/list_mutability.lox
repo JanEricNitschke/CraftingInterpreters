@@ -1,8 +1,8 @@
 var a = "Test";
 var my_list = [1, a, 2];
-print(my_list); // expect: [1, Test, 2]
+print(my_list); # expect: [1, Test, 2]
 a = 5;
-print(my_list); // expect: [1, Test, 2]
+print(my_list); # expect: [1, Test, 2]
 class Foo {
     init() {
         this.x = 1;
@@ -11,7 +11,7 @@ class Foo {
 
 a = Foo();
 my_list[1] = a;
-print(my_list); // expect: [1, <Foo instance>, 2]
-print(a.x); // expect: 1
+print(my_list); # expect: [1, <Foo instance>, 2]
+print(a.x); # expect: 1
 my_list[1].x = 2;
-print(a.x); // expect: 2
+print(a.x); # expect: 2

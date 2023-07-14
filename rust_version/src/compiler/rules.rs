@@ -62,7 +62,7 @@ macro_rules! make_rules {
     }};
 }
 
-pub(super) type Rules<'scanner, 'arena> = [Rule<'scanner, 'arena>; 51];
+pub(super) type Rules<'scanner, 'arena> = [Rule<'scanner, 'arena>; 65];
 
 // Can't be static because the associated function types include lifetimes
 #[rustfmt::skip]
@@ -79,10 +79,24 @@ pub(super) fn make_rules<'scanner, 'arena>() -> Rules<'scanner, 'arena> {
         Default      = [None,     None,      None      ],
         Dot          = [None,     dot,       Call      ],
         Minus        = [unary,    binary,    Term      ],
+        MinusEqual   = [None,     binary,    Term      ], // TODO
         Plus         = [None,     binary,    Term      ],
+        PlusEqual    = [None,     binary,    Term      ], // TODO
+        Pipe         = [None,     binary,    Term      ],
+        PipeEqual    = [None,     binary,    Term      ], // TODO
+        Percent      = [None,     binary,    Term      ],
+        PercentEqual = [None,     binary,    Term      ], // TODO
+        Amper        = [None,     binary,    Term      ],
+        AmperEqual   = [None,     binary,    Term      ], // TODO
+        Hat          = [None,     binary,    Term      ],
+        HatEqual     = [None,     binary,    Term      ], // TODO
         Semicolon    = [None,     None,      None      ],
         Slash        = [None,     binary,    Factor    ],
+        SlashEqual   = [None,     binary,    Factor    ], // TODO
+        SlashSlash   = [None,     binary,    Factor    ],
         Star         = [None,     binary,    Factor    ],
+        StarEqual    = [None,     binary,    Factor    ], // TODO
+        StarStar     = [None,     binary,    Factor    ],
         Bang         = [unary,    None,      None      ],
         BangEqual    = [None,     binary,    Equality  ],
         Equal        = [None,     None,      None      ],
@@ -186,6 +200,12 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
             TK::Minus => self.emit_byte(OpCode::Subtract, line),
             TK::Star => self.emit_byte(OpCode::Multiply, line),
             TK::Slash => self.emit_byte(OpCode::Divide, line),
+            TK::Hat => self.emit_byte(OpCode::BitXor, line),
+            TK::Pipe => self.emit_byte(OpCode::BitOr, line),
+            TK::Amper => self.emit_byte(OpCode::BitAnd, line),
+            TK::Percent => self.emit_byte(OpCode::Mod, line),
+            TK::StarStar => self.emit_byte(OpCode::Exp, line),
+            TK::SlashSlash => self.emit_byte(OpCode::FloorDiv, line),
             _ => unreachable!("Unkown binary operator: {}", operator),
         }
     }

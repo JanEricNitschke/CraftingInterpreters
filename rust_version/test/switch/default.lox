@@ -8,6 +8,6 @@ switch(x * 2) {
         print(x);
     case 13: print("also wrong");
     default:
-        print("default!"); // expect: default!
-        print(x); // expect: 10
+        print("default!"); # expect: default!
+        print(x); # expect: 10
 }

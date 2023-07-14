@@ -35,8 +35,8 @@ macro_rules! runtime_error {
 }
 
 macro_rules! binary_op {
-    ($self:ident, $op:tt) => {
-        if !$self.binary_op(|a, b| a $op b) {
+    ($self:ident, $op:tt, $intonly:tt) => {
+        if !$self.binary_op(|a, b| a $op b, $intonly) {
             return InterpretResult::RuntimeError;
         }
     }
@@ -260,11 +260,25 @@ impl VM {
                         return value;
                     }
                 }
-                OpCode::Subtract => binary_op!(self, -),
-                OpCode::Multiply => binary_op!(self, *),
-                OpCode::Divide => binary_op!(self, /),
-                OpCode::Greater => binary_op!(self, >),
-                OpCode::Less => binary_op!(self, <),
+                OpCode::Subtract => binary_op!(self, -, false),
+                OpCode::Multiply => binary_op!(self, *, false),
+                OpCode::Divide => binary_op!(self, /, false),
+                OpCode::BitXor => binary_op!(self, ^, true),
+                OpCode::BitAnd => binary_op!(self, &, true),
+                OpCode::BitOr => binary_op!(self, |, true),
+                OpCode::Exp => {
+                    if let Some(value) = self.exponatiate() {
+                        return value;
+                    }
+                }
+                OpCode::Mod => binary_op!(self, %, false),
+                OpCode::FloorDiv => {
+                    if let Some(value) = self.floor_div() {
+                        return value;
+                    }
+                }
+                OpCode::Greater => binary_op!(self, >, false),
+                OpCode::Less => binary_op!(self, <, false),
                 OpCode::Jump => {
                     let offset = self.read_16bit_number();
                     self.callstack.current_mut().ip += offset;
@@ -489,7 +503,7 @@ impl VM {
         }
     }
 
-    fn binary_op<T: Into<Value>>(&mut self, op: BinaryOp<T>) -> bool {
+    fn binary_op<T: Into<Value>>(&mut self, op: BinaryOp<T>, int_only: bool) -> bool {
         let slice_start = self.stack.len() - 2;
 
         let ok = match &self.stack[slice_start..] {
@@ -497,7 +511,100 @@ impl VM {
                 if let (Value::Number(a), Value::Number(b)) =
                     (&self.heap.values[left], &self.heap.values[right])
                 {
-                    let value = op(*a, *b).into();
+                    if int_only
+                        && (!matches!(a, Number::Integer(_)) | !matches!(b, Number::Integer(_)))
+                    {
+                        false
+                    } else {
+                        let value = op(*a, *b).into();
+                        self.stack.pop();
+                        self.stack.pop();
+                        self.stack_push_value(value);
+                        true
+                    }
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        };
+
+        if !ok {
+            if int_only {
+                runtime_error!(
+                    self,
+                    "Operands must be integers. Got: [{}]",
+                    self.stack[slice_start..]
+                        .iter()
+                        .map(|v| format!("{}", self.heap.values[v]))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            } else {
+                runtime_error!(
+                    self,
+                    "Operands must be numbers. Got: [{}]",
+                    self.stack[slice_start..]
+                        .iter()
+                        .map(|v| format!("{}", self.heap.values[v]))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        }
+        ok
+    }
+
+    fn add(&mut self) -> Option<InterpretResult> {
+        let slice_start = self.stack.len() - 2;
+        let ok = match &self.stack[slice_start..] {
+            [left, right] => match (&self.heap.values[left], &self.heap.values[right]) {
+                (Value::Number(a), Value::Number(b)) => {
+                    let value = (*a + *b).into();
+                    self.stack.pop();
+                    self.stack.pop();
+                    self.stack_push_value(value);
+                    true
+                }
+                (Value::String(a), Value::String(b)) => {
+                    // This could be optimized by allowing mutations via the heap
+                    let new_string = format!("{}{}", self.heap.strings[a], self.heap.strings[b]);
+                    let new_string_id = self.heap.add_string(new_string);
+                    self.stack.pop();
+                    self.stack.pop();
+                    self.stack_push_value(new_string_id.into());
+                    true
+                }
+                _ => false,
+            },
+            _ => false,
+        };
+
+        if !ok {
+            runtime_error!(
+                self,
+                "Operands must be two numbers or two strings. Got: [{}]",
+                self.stack[slice_start..]
+                    .iter()
+                    .map(|v| format!("{}", self.heap.values[v]))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+
+            return Some(InterpretResult::RuntimeError);
+        }
+        None
+    }
+
+    fn exponatiate(&mut self) -> Option<InterpretResult> {
+        let slice_start = self.stack.len() - 2;
+
+        let ok = match &self.stack[slice_start..] {
+            [left, right] => {
+                if let (Value::Number(a), Value::Number(b)) =
+                    (&self.heap.values[left], &self.heap.values[right])
+                {
+                    let value = a.pow(*b).into();
                     self.stack.pop();
                     self.stack.pop();
                     self.stack_push_value(value);
@@ -510,9 +617,53 @@ impl VM {
         };
 
         if !ok {
-            runtime_error!(self, "Operands must be numbers.");
+            runtime_error!(
+                self,
+                "Operands must be numbers. Got: [{}]",
+                self.stack[slice_start..]
+                    .iter()
+                    .map(|v| format!("{}", self.heap.values[v]))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            return Some(InterpretResult::RuntimeError);
         }
-        ok
+        None
+    }
+
+    fn floor_div(&mut self) -> Option<InterpretResult> {
+        let slice_start = self.stack.len() - 2;
+
+        let ok = match &self.stack[slice_start..] {
+            [left, right] => {
+                if let (Value::Number(a), Value::Number(b)) =
+                    (&self.heap.values[left], &self.heap.values[right])
+                {
+                    let value = a.floor_div(*b).into();
+                    self.stack.pop();
+                    self.stack.pop();
+                    self.stack_push_value(value);
+                    true
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        };
+
+        if !ok {
+            runtime_error!(
+                self,
+                "Operands must be numbers. Got: [{}]",
+                self.stack[slice_start..]
+                    .iter()
+                    .map(|v| format!("{}", self.heap.values[v]))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            return Some(InterpretResult::RuntimeError);
+        }
+        None
     }
 
     fn index_subscript(&mut self) -> Option<InterpretResult> {
@@ -811,46 +962,6 @@ impl VM {
         self.stack_push(self.heap.builtin_constants().bool(value));
     }
 
-    fn add(&mut self) -> Option<InterpretResult> {
-        let slice_start = self.stack.len() - 2;
-        let ok = match &self.stack[slice_start..] {
-            [left, right] => match (&self.heap.values[left], &self.heap.values[right]) {
-                (Value::Number(a), Value::Number(b)) => {
-                    let value = (*a + *b).into();
-                    self.stack.pop();
-                    self.stack.pop();
-                    self.stack_push_value(value);
-                    true
-                }
-                (Value::String(a), Value::String(b)) => {
-                    // This could be optimized by allowing mutations via the heap
-                    let new_string = format!("{}{}", self.heap.strings[a], self.heap.strings[b]);
-                    let new_string_id = self.heap.add_string(new_string);
-                    self.stack.pop();
-                    self.stack.pop();
-                    self.stack_push_value(new_string_id.into());
-                    true
-                }
-                _ => false,
-            },
-            _ => false,
-        };
-
-        if !ok {
-            runtime_error!(
-                self,
-                "Operands must be two numbers or two strings. Got: [{}]",
-                self.stack[slice_start..]
-                    .iter()
-                    .map(|v| format!("{}", self.heap.values[v]))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            );
-
-            return Some(InterpretResult::RuntimeError);
-        }
-        None
-    }
     fn read_byte(&mut self) -> u8 {
         let frame = self.callstack.current_mut();
         let index = frame.ip;

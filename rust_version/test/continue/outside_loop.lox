@@ -1,1 +1,1 @@
-continue; // Error at 'continue': 'continue' outside a loop.
+continue; # Error at 'continue': 'continue' outside a loop.

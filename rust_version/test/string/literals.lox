@@ -1,2 +1,2 @@
-print("(" + "" + ")");   // expect: ()
-print("a string"); // expect: a string
+print("(" + "" + ")");   # expect: ()
+print("a string"); # expect: a string

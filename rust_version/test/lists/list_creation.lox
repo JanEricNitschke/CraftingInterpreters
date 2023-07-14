@@ -1,8 +1,8 @@
 var my_list = [1, 2, 3];
-print(my_list); // expect: [1, 2, 3]
+print(my_list); # expect: [1, 2, 3]
 
 my_list = [1, "Test", nil];
-print(my_list); // expect: [1, Test, nil]
+print(my_list); # expect: [1, Test, nil]
 
 fun fib(n) {
   if (n < 2) return n;
@@ -14,4 +14,4 @@ class Tree {
 }
 
 my_list = [fib, Tree, Tree(), true];
-print(my_list); // expect: [<fn fib>, <class Tree>, <Tree instance>, true]
+print(my_list); # expect: [<fn fib>, <class Tree>, <Tree instance>, true]

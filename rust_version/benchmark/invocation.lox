@@ -1,4 +1,4 @@
-// This benchmark stresses just method invocation.
+# This benchmark stresses just method invocation.
 
 class Foo {
   method0() {}
@@ -70,4 +70,4 @@ while (i < 50000) {
   i = i + 1;
 }
 
-// print(clock() - start);
+# print(clock() - start);

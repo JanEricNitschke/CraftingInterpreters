@@ -5,5 +5,5 @@
     }
   }
 
-  print(Foo().returnSelf()); // expect: <class Foo>
+  print(Foo().returnSelf()); # expect: <class Foo>
 }

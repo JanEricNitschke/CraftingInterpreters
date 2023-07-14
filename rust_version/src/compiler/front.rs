@@ -20,7 +20,6 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
     }
 
     pub(super) fn consume(&mut self, kind: TK, msg: &str) {
-        // println!("{:?}", self.current);
         if self.check(kind) {
             self.advance();
             return;
