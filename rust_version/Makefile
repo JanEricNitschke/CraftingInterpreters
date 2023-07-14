@@ -34,13 +34,13 @@ benchmark: fib-benchmark more-benchmark
 more-benchmark: $(REL_BIN)
 	for filename in benchmark/*.lox; do \
 		echo $$filename; \
-		hyperfine --show-output --warmup 1 ".\\target\\release\\rust_version $$filename" "..\\reference\\craftinginterpreters\\clox $$filename" "..\\reference\\craftinginterpreters\\jlox.bat $$filename"; \
+		hyperfine --show-output --warmup 1 ".\\target\\release\\rust_version $$filename" "..\\reference\\craftinginterpreters\\clox $$filename.nom" "..\\reference\\craftinginterpreters\\jlox.bat $$filename.nom"; \
 	done
 
 .PHONY: fib-benchmark
 fib-benchmark: $(REL_BIN)
-	hyperfine --warmup 1 ".\\target\release\\rust_version benchmark\\fib\\fib.lox" "..\\reference\\craftinginterpreters\\clox benchmark\\fib\\fib.lox"   \
-	"python benchmark\\fib\\fib.py" "ruby benchmark\\fib\\fib.rb" "..\\reference\\craftinginterpreters\\jlox.bat benchmark\\fib\\fib.lox" \
+	hyperfine --warmup 1 ".\\target\release\\rust_version benchmark\\fib\\fib.lox" "..\\reference\\craftinginterpreters\\clox benchmark\\fib\\fib.lox.nom"   \
+	"python benchmark\\fib\\fib.py" "ruby benchmark\\fib\\fib.rb" "..\\reference\\craftinginterpreters\\jlox.bat benchmark\\fib\\fib.lox.nom" \
 
 .PHONY: benchmark-ci
 benchmark-ci: fib-benchmark-ci more-benchmark-ci
@@ -49,10 +49,10 @@ benchmark-ci: fib-benchmark-ci more-benchmark-ci
 more-benchmark-ci: $(REL_BIN)
 	for filename in benchmark/*.lox; do \
 		echo $$filename; \
-		hyperfine --show-output --warmup 1 "./target/release/rust_version $$filename" "../reference/craftinginterpreters/clox $$filename" "../reference/craftinginterpreters/jlox $$filename"; \
+		hyperfine --show-output --warmup 1 "./target/release/rust_version $$filename" "../reference/craftinginterpreters/clox $$filename.nom" "../reference/craftinginterpreters/jlox $$filename.nom"; \
 	done
 
 .PHONY: fib-benchmark-ci
 fib-benchmark-ci: $(REL_BIN)
-	hyperfine --warmup 1 "./target/release/rust_version benchmark/fib/fib.lox" "../reference/craftinginterpreters/clox benchmark/fib/fib.lox"   \
-	"python benchmark/fib/fib.py" "ruby benchmark/fib/fib.rb" "../reference/craftinginterpreters/jlox benchmark/fib/fib.lox" \
+	hyperfine --warmup 1 "./target/release/rust_version benchmark/fib/fib.lox" "../reference/craftinginterpreters/clox benchmark/fib/fib.lox.nom"   \
+	"python benchmark/fib/fib.py" "ruby benchmark/fib/fib.rb" "../reference/craftinginterpreters/jlox benchmark/fib/fib.lox.nom" \
