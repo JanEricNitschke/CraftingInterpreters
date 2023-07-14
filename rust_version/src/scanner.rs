@@ -69,6 +69,7 @@ pub enum TokenKind {
     For,
     Fun,
     If,
+    In,
     Unless,
     Nil,
     Or,
@@ -268,13 +269,9 @@ impl<'a> Scanner<'a> {
                     self.advance();
                 }
                 Some(b'#') => {
-                    // if self.peek_next() == Some(&b'/') {
-                        while !matches!(self.peek(), Some(b'\n') | None) {
-                            self.advance();
-                         }
-                    // } else {
-                    //     break;
-                    // }
+                    while !matches!(self.peek(), Some(b'\n') | None) {
+                        self.advance();
+                    }
                 }
                 _ => break,
             }
@@ -356,7 +353,11 @@ impl<'a> Scanner<'a> {
                 Some(b'u') => self.check_keyword(2, "n", TokenKind::Fun),
                 _ => TokenKind::Identifier,
             },
-            b'i' => self.check_keyword(1, "f", TokenKind::If),
+            b'i' => match self.source.get(self.start + 1) {
+                Some(b'f') => self.check_keyword(2, "", TokenKind::If),
+                Some(b'n') => self.check_keyword(2, "", TokenKind::In),
+                _ => TokenKind::Identifier,
+            },
             b'n' => self.check_keyword(1, "il", TokenKind::Nil),
             b'o' => self.check_keyword(1, "r", TokenKind::Or),
             b'r' => self.check_keyword(1, "eturn", TokenKind::Return),

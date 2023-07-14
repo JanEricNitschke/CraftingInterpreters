@@ -14,11 +14,14 @@ pub(super) enum Precedence {
     And,        // and
     Equality,   // == !=
     Comparison, // < > <= >=
+    BitOr,      // |
+    BitXor,     // ^
+    BitAnd,     // &
     Term,       // + -
-    Factor,     // * /
+    Factor,     // * / // %
     Unary,      // ! -
-    Call,       // . ()
-    Subscript,  // []
+    Exponent,   // **
+    Call,       // . () []
     Primary,
 }
 
@@ -62,7 +65,7 @@ macro_rules! make_rules {
     }};
 }
 
-pub(super) type Rules<'scanner, 'arena> = [Rule<'scanner, 'arena>; 65];
+pub(super) type Rules<'scanner, 'arena> = [Rule<'scanner, 'arena>; 66];
 
 // Can't be static because the associated function types include lifetimes
 #[rustfmt::skip]
@@ -73,30 +76,30 @@ pub(super) fn make_rules<'scanner, 'arena>() -> Rules<'scanner, 'arena> {
         LeftBrace    = [None,     None,      None      ],
         RightBrace   = [None,     None,      None      ],
         Colon        = [None,     None,      None      ],
-        LeftBracket  = [list,     subscript, Subscript ],
+        LeftBracket  = [list,     subscript, Call      ],
         RightBracket = [None,     None,      None      ],
         Comma        = [None,     None,      None      ],
         Default      = [None,     None,      None      ],
         Dot          = [None,     dot,       Call      ],
         Minus        = [unary,    binary,    Term      ],
-        MinusEqual   = [None,     binary,    Term      ], // TODO
+        MinusEqual   = [None,     None,      None      ], // TODO
         Plus         = [None,     binary,    Term      ],
-        PlusEqual    = [None,     binary,    Term      ], // TODO
-        Pipe         = [None,     binary,    Term      ],
-        PipeEqual    = [None,     binary,    Term      ], // TODO
-        Percent      = [None,     binary,    Term      ],
-        PercentEqual = [None,     binary,    Term      ], // TODO
-        Amper        = [None,     binary,    Term      ],
-        AmperEqual   = [None,     binary,    Term      ], // TODO
-        Hat          = [None,     binary,    Term      ],
-        HatEqual     = [None,     binary,    Term      ], // TODO
+        PlusEqual    = [None,     None,      None      ], // TODO
+        Pipe         = [None,     binary,    BitOr     ],
+        PipeEqual    = [None,     None,      None      ], // TODO
+        Percent      = [None,     binary,    Factor    ],
+        PercentEqual = [None,     None,      None      ], // TODO
+        Amper        = [None,     binary,    BitAnd    ],
+        AmperEqual   = [None,     None,      None      ], // TODO
+        Hat          = [None,     binary,    BitXor    ],
+        HatEqual     = [None,     None,      None      ], // TODO
         Semicolon    = [None,     None,      None      ],
         Slash        = [None,     binary,    Factor    ],
-        SlashEqual   = [None,     binary,    Factor    ], // TODO
+        SlashEqual   = [None,     None,      None      ], // TODO
         SlashSlash   = [None,     binary,    Factor    ],
         Star         = [None,     binary,    Factor    ],
-        StarEqual    = [None,     binary,    Factor    ], // TODO
-        StarStar     = [None,     binary,    Factor    ],
+        StarEqual    = [None,     None,      None      ], // TODO
+        StarStar     = [None,     binary,    Exponent  ],
         Bang         = [unary,    None,      None      ],
         BangEqual    = [None,     binary,    Equality  ],
         Equal        = [None,     None,      None      ],
@@ -106,6 +109,7 @@ pub(super) fn make_rules<'scanner, 'arena>() -> Rules<'scanner, 'arena> {
         Less         = [None,     binary,    Comparison],
         LessEqual    = [None,     binary,    Comparison],
         Identifier   = [variable, None,      None      ],
+        In           = [None,     None,      None      ], // TODO
         String       = [string,   None,      None      ],
         Number       = [number,   None,      None      ],
         Integer      = [integer,  None,      None      ],
