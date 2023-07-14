@@ -254,12 +254,14 @@ impl std::fmt::Display for Value {
 
                 let mut comma_separated = String::new();
                 comma_separated.push('[');
-                for num in &mapped[0..mapped.len() - 1] {
-                    comma_separated.push_str(&num.to_string());
-                    comma_separated.push_str(", ");
-                }
+                if mapped.len() > 0 {
+                    for num in &mapped[0..mapped.len() - 1] {
+                        comma_separated.push_str(&num.to_string());
+                        comma_separated.push_str(", ");
+                    }
 
-                comma_separated.push_str(&mapped[mapped.len() - 1].to_string());
+                    comma_separated.push_str(&mapped[mapped.len() - 1].to_string());
+                }
                 comma_separated.push(']');
                 comma_separated
             }),

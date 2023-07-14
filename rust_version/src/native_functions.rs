@@ -160,7 +160,117 @@ fn append_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> 
             Ok(heap.builtin_constants().nil)
         }
         x => Err(format!(
-            "'Append' expects its first argument to be a list, got `{}` instead.",
+            "'append' expects its first argument to be a list, got `{}` instead.",
+            x
+        )),
+    }
+}
+
+fn pop_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
+    let index = if args.len() == 1 {
+        None
+    } else {
+        let index = match &heap.values[args[1]] {
+            Value::Number(Number::Integer(n)) => match usize::try_from(*n) {
+                Ok(index) => index,
+                Err(_) => {
+                    return Err(format!(
+                        "Can not index into list with negative or too large numbers, got `{}`.",
+                        n
+                    ));
+                }
+            },
+            x => {
+                return Err(format!(
+                    "Can only index into list with integer, got `{}`.",
+                    x
+                ));
+            }
+        };
+        Some(index)
+    };
+
+    let my_list = match &mut heap.values[args[0]] {
+        Value::List(list) => list,
+        x => {
+            return Err(format!(
+                "'pop' expects its first argument to be a list, got `{}` instead.",
+                x
+            ))
+        }
+    };
+
+    match index {
+        Some(index) => {
+            let length = my_list.items.len();
+            if index >= length {
+                Err(format!(
+                    "Index `{}` is out of bounds of list with len `{}`.",
+                    index, length
+                ))
+            } else {
+                Ok(my_list.items.remove(index))
+            }
+        }
+        None => {
+            if let Some(last_element) = my_list.items.pop() {
+                Ok(last_element)
+            } else {
+                Err(format!("Can't 'pop' from an empty list.",))
+            }
+        }
+    }
+}
+
+fn insert_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
+    let index = match &heap.values[args[1]] {
+        Value::Number(Number::Integer(n)) => match usize::try_from(*n) {
+            Ok(index) => index,
+            Err(_) => {
+                return Err(format!(
+                    "Can not index into list with negative or too large numbers, got `{}`.",
+                    n
+                ));
+            }
+        },
+        x => {
+            return Err(format!(
+                "Can only index into list with integer, got `{}`.",
+                x
+            ));
+        }
+    };
+
+    let my_list = match &mut heap.values[args[0]] {
+        Value::List(list) => list,
+        x => {
+            return Err(format!(
+                "'insert' expects its first argument to be a list, got `{}` instead.",
+                x
+            ))
+        }
+    };
+
+    let length = my_list.items.len();
+    if index > length {
+        Err(format!(
+            "Index `{}` is out of bounds of list with len `{}`.",
+            index, length
+        ))
+    } else {
+        my_list.items.insert(index, *args[2]);
+        Ok(heap.builtin_constants().nil)
+    }
+}
+
+fn len_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
+    match &heap.values[args[0]] {
+        Value::List(list) => {
+            Ok(heap
+                .add_value((list.items.len() as i64).into()))
+        }
+        x => Err(format!(
+            "'len' expected list argument, got: `{}` instead.",
             x
         )),
     }
@@ -259,7 +369,7 @@ impl NativeFunctions {
     pub fn create_names(&mut self, heap: &mut Heap) {
         for name in [
             "clock", "sqrt", "input", "float", "int", "str", "type", "getattr", "setattr",
-            "hasattr", "delattr", "rng", "print", "append",
+            "hasattr", "delattr", "rng", "print", "append", "pop", "insert", "len"
         ] {
             let string_id = heap.add_string(name.to_string());
             self.string_ids.insert(name.to_string(), string_id);
@@ -285,5 +395,8 @@ impl NativeFunctions {
         vm.define_native(self.string_ids["delattr"], &[2], delattr_native);
         vm.define_native(self.string_ids["rng"], &[2], rng_native);
         vm.define_native(self.string_ids["append"], &[2], append_native);
+        vm.define_native(self.string_ids["pop"], &[1, 2], pop_native);
+        vm.define_native(self.string_ids["insert"], &[3], insert_native);
+        vm.define_native(self.string_ids["len"], &[1], len_native);
     }
 }
