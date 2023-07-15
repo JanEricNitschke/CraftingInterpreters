@@ -6,11 +6,18 @@
 #print(my_list);
 
 
-
-var list = Array();
-#print(list);
-#list.stuff = "stuff";
-#print(list.stuff);
+var list = List();
 var a = list.append;
 print(a);
 a("1");
+print(list);
+list.append(2);
+print(list);
+
+var list = [];
+var a = list.append;
+print(a);
+a("1");
+print(list);
+list.append(2);
+print(list);

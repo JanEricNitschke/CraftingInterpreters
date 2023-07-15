@@ -1,1 +1,1 @@
-pop("Test"); # expect runtime error: 'pop' expects its first argument to be a list, got `Test` instead.
+"Test".pop(); # expect runtime error: Only instances have methods.

@@ -7,7 +7,7 @@ use rustc_hash::FxHashMap as HashMap;
 use crate::{
     compiler::Compiler,
     heap::{Heap, StringId, ValueId},
-    value::{Number, Value},
+    value::{List, Number, Value},
     vm::VM,
 };
 
@@ -156,10 +156,23 @@ fn rng_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     }
 }
 
-fn append_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
-    match &mut heap.values[args[0]] {
+fn init_list_native(
+    heap: &mut Heap,
+    _receiver: &ValueId,
+    _args: &[&ValueId],
+) -> Result<ValueId, String> {
+    let list = List::new(*heap.native_classes.get("List").unwrap());
+    Ok(heap.add_value(list.into()))
+}
+
+fn append_native(
+    heap: &mut Heap,
+    receiver: &ValueId,
+    args: &[&ValueId],
+) -> Result<ValueId, String> {
+    match &mut heap.values[receiver] {
         Value::List(list) => {
-            list.items.push(*args[1]);
+            list.items.push(*args[0]);
             Ok(heap.builtin_constants().nil)
         }
         x => Err(format!(
@@ -169,11 +182,11 @@ fn append_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> 
     }
 }
 
-fn pop_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
-    let index = if args.len() == 1 {
+fn pop_native(heap: &mut Heap, receiver: &ValueId, args: &[&ValueId]) -> Result<ValueId, String> {
+    let index = if args.is_empty() {
         None
     } else {
-        let index = match &heap.values[args[1]] {
+        let index = match &heap.values[args[0]] {
             Value::Number(Number::Integer(n)) => match usize::try_from(*n) {
                 Ok(index) => index,
                 Err(_) => {
@@ -193,7 +206,7 @@ fn pop_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
         Some(index)
     };
 
-    let my_list = match &mut heap.values[args[0]] {
+    let my_list = match &mut heap.values[receiver] {
         Value::List(list) => list,
         x => {
             return Err(format!(
@@ -225,8 +238,12 @@ fn pop_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     }
 }
 
-fn insert_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
-    let index = match &heap.values[args[1]] {
+fn insert_native(
+    heap: &mut Heap,
+    receiver: &ValueId,
+    args: &[&ValueId],
+) -> Result<ValueId, String> {
+    let index = match &heap.values[args[0]] {
         Value::Number(Number::Integer(n)) => match usize::try_from(*n) {
             Ok(index) => index,
             Err(_) => {
@@ -244,7 +261,7 @@ fn insert_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> 
         }
     };
 
-    let my_list = match &mut heap.values[args[0]] {
+    let my_list = match &mut heap.values[receiver] {
         Value::List(list) => list,
         x => {
             return Err(format!(
@@ -261,7 +278,7 @@ fn insert_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> 
             index, length
         ))
     } else {
-        my_list.items.insert(index, *args[2]);
+        my_list.items.insert(index, *args[1]);
         Ok(heap.builtin_constants().nil)
     }
 }
@@ -369,7 +386,7 @@ impl Natives {
     pub fn create_names(&mut self, heap: &mut Heap) {
         for name in [
             "clock", "sqrt", "input", "float", "int", "str", "type", "getattr", "setattr",
-            "hasattr", "delattr", "rng", "print", "append", "pop", "insert", "len", "Array",
+            "hasattr", "delattr", "rng", "print", "append", "pop", "insert", "len", "List",
         ] {
             let string_id = heap.add_string(name.to_string());
             self.string_ids.insert(name.to_string(), string_id);
@@ -394,17 +411,33 @@ impl Natives {
         vm.define_native_function(self.string_ids["hasattr"], &[2], hasattr_native);
         vm.define_native_function(self.string_ids["delattr"], &[2], delattr_native);
         vm.define_native_function(self.string_ids["rng"], &[2], rng_native);
-        vm.define_native_function(self.string_ids["append"], &[2], append_native);
-        vm.define_native_function(self.string_ids["pop"], &[1, 2], pop_native);
-        vm.define_native_function(self.string_ids["insert"], &[3], insert_native);
         vm.define_native_function(self.string_ids["len"], &[1], len_native);
 
-        vm.define_native_class(self.string_ids["Array"]);
+        vm.define_native_class(self.string_ids["List"]);
         vm.define_native_method(
-            self.string_ids["Array"],
+            self.string_ids["List"],
             self.string_ids["append"],
-            &[2],
+            &[1],
             append_native,
         );
+        vm.define_native_method(
+            self.string_ids["List"],
+            vm.init_string(),
+            &[0],
+            init_list_native,
+        );
+        vm.define_native_method(
+            self.string_ids["List"],
+            self.string_ids["pop"],
+            &[0, 1],
+            pop_native,
+        );
+        vm.define_native_method(
+            self.string_ids["List"],
+            self.string_ids["insert"],
+            &[2],
+            insert_native,
+        );
+        // vm.define_native_method(self.string_ids["List"],self.string_ids["len"], &[0], len_native);
     }
 }

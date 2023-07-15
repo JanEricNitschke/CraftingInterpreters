@@ -308,7 +308,7 @@ impl std::fmt::Display for Value {
             )),
             Value::BoundMethod(method) => f.pad(&format!(
                 "<bound method {}.{} of {}>",
-                *method.receiver.as_instance().class.as_class().name,
+                *method.receiver_class_name(),
                 *method.method_name(),
                 *method.receiver,
             )),
@@ -364,12 +364,12 @@ impl Value {
         }
     }
 
-    pub fn as_instance(&self) -> &Instance {
-        match self {
-            Value::Instance(i) => i,
-            _ => unreachable!("Expected Instance, found `{}`", self),
-        }
-    }
+    // pub fn as_instance(&self) -> &Instance {
+    //     match self {
+    //         Value::Instance(i) => i,
+    //         _ => unreachable!("Expected Instance, found `{}`", self),
+    //     }
+    // }
 
     pub fn as_instance_mut(&mut self) -> &mut Instance {
         match self {
@@ -396,6 +396,17 @@ impl Value {
         match self {
             Value::Upvalue(v) => v,
             _ => unreachable!("Expected upvalue, found `{}`", self),
+        }
+    }
+
+    pub fn class_name(&self) -> StringId {
+        match &self {
+            Value::Instance(instance) => instance.class.as_class().name,
+            Value::List(list) => list.class.as_class().name,
+            x => unreachable!(
+                "Only instances and lists currently have classes. Got `{}`",
+                x
+            ),
         }
     }
 }
@@ -454,40 +465,11 @@ pub struct NativeMethod {
             PartialEq(compare_with = "always_equals"),
             PartialOrd = "ignore"
         )]
-    pub fun: NativeFunctionImpl,
-}
-
-pub(super) trait NativeCallable {
-    fn fun(&self) -> NativeFunctionImpl;
-    fn arity(&self) -> &'static [u8];
-    fn name(&self) -> StringId;
-}
-
-impl NativeCallable for NativeFunction {
-    fn fun(&self) -> NativeFunctionImpl {
-        self.fun
-    }
-    fn arity(&self) -> &'static [u8] {
-        self.arity
-    }
-    fn name(&self) -> StringId {
-        self.name
-    }
-}
-
-impl NativeCallable for NativeMethod {
-    fn fun(&self) -> NativeFunctionImpl {
-        self.fun
-    }
-    fn arity(&self) -> &'static [u8] {
-        self.arity
-    }
-    fn name(&self) -> StringId {
-        self.name
-    }
+    pub fun: NativeMethodImpl,
 }
 
 pub type NativeFunctionImpl = fn(&mut Heap, &[&ValueId]) -> Result<ValueId, String>;
+pub type NativeMethodImpl = fn(&mut Heap, &ValueId, &[&ValueId]) -> Result<ValueId, String>;
 
 fn always_equals<T>(_: &T, _: &T) -> bool {
     true
@@ -549,6 +531,17 @@ impl BoundMethod {
             ),
         }
     }
+
+    fn receiver_class_name(&self) -> StringId {
+        match &*self.receiver {
+            Value::Instance(instance) => instance.class.as_class().name,
+            Value::List(list) => list.class.as_class().name,
+            x => unreachable!(
+                "Bound methods can only have instances or lists as receivers, got `{}` instead.",
+                x
+            ),
+        }
+    }
 }
 
 impl PartialEq for BoundMethod {
@@ -561,11 +554,15 @@ impl PartialEq for BoundMethod {
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub struct List {
     pub items: Vec<ValueId>,
+    pub class: ValueId,
 }
 
 impl List {
     #[must_use]
-    pub fn new() -> Self {
-        List { items: Vec::new() }
+    pub fn new(array_class: ValueId) -> Self {
+        List {
+            items: Vec::new(),
+            class: array_class,
+        }
     }
 }

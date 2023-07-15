@@ -1,3 +1,4 @@
+use rustc_hash::FxHashMap as HashMap;
 use std::{
     ops::{Deref, DerefMut},
     pin::Pin,
@@ -233,6 +234,7 @@ impl BuiltinConstants {
 #[derive(Clone, Debug)]
 pub struct Heap {
     builtin_constants: Option<BuiltinConstants>,
+    pub native_classes: HashMap<String, ValueId>,
     pub strings: Arena<StringKey, String>,
     pub values: Arena<ValueKey, Value>,
     pub functions: Arena<FunctionKey, Function>,
@@ -248,6 +250,7 @@ impl Heap {
 
         let mut heap = Box::pin(Self {
             builtin_constants: None,
+            native_classes: HashMap::default(),
 
             strings: Arena::new("String", log_gc),
             values: Arena::new("Value", log_gc),
@@ -384,6 +387,8 @@ impl Heap {
                 self.values.gray.push(method_id);
             }
             Value::List(list) => {
+                let class_id = list.class.id;
+                self.values.gray.push(class_id);
                 for item in &list.items {
                     self.values.gray.push(item.id);
                 }

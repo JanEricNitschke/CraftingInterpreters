@@ -15,6 +15,9 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
             if !self.check(TK::Error) {
                 break;
             }
+            // Could manually recursively inline `error_at_current` to get rid of this string copy,
+            // but... this seems good enough, really.
+            #[allow(clippy::unnecessary_to_owned)]
             self.error_at_current(&self.current.as_ref().unwrap().as_str().to_string());
         }
     }

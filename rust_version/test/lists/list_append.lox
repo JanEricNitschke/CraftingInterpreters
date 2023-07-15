@@ -1,7 +1,7 @@
 var my_list = [1, 2, 3];
 print(my_list); # expect: [1, 2, 3]
 
-append(my_list, 4);
+my_list.append(4);
 print(my_list); # expect: [1, 2, 3, 4]
 
-append("Test", 5); # expect runtime error: 'append' expects its first argument to be a list, got `Test` instead.
+"Test".append(5); # expect runtime error: Only instances have methods.

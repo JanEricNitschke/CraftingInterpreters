@@ -13,7 +13,7 @@ use crate::{
     config,
     heap::{Heap, StringId},
     scanner::Scanner,
-    value::{NativeCallable, NativeFunction, NativeFunctionImpl, NativeMethod, Value},
+    value::{NativeFunction, NativeFunctionImpl, NativeMethod, NativeMethodImpl, Value},
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -147,6 +147,10 @@ impl VM {
             globals: HashMap::default(),
             open_upvalues: VecDeque::new(),
         }
+    }
+
+    pub fn init_string(&self) -> StringId {
+        self.heap.builtin_constants().init_string
     }
 
     pub fn interpret(&mut self, source: &[u8]) -> InterpretResult {
@@ -374,10 +378,28 @@ impl VM {
                 OpCode::GetProperty => {
                     let field = self.read_string("GET_PROPERTY");
 
-                    let instance = match &self.heap.values
-                        [self.peek(0).expect("Stack underflow in GET_PROPERTY")]
+                    // Probaby better to just grab the class and ask if it is native
+                    match &self.heap.values[self.peek(0).expect("Stack underflow in GET_PROPERTY")]
                     {
-                        Value::Instance(instance) => instance.clone(),
+                        Value::Instance(instance) => {
+                            if let Some(value) = instance.fields.get(&self.heap.strings[&field]) {
+                                self.stack.pop(); // instance
+                                self.stack_push(*value);
+                            } else if self.bind_method(instance.class, field) {
+                                // Just using the side effects
+                            } else {
+                                runtime_error!(self, "Undefined property '{}'.", *field);
+                                return InterpretResult::RuntimeError;
+                            }
+                        }
+                        Value::List(list) => {
+                            if self.bind_method(list.class, field) {
+                                // Just using the side effects
+                            } else {
+                                runtime_error!(self, "Undefined property '{}'.", *field);
+                                return InterpretResult::RuntimeError;
+                            }
+                        }
                         x => {
                             runtime_error!(
                                 self,
@@ -388,16 +410,6 @@ impl VM {
                             return InterpretResult::RuntimeError;
                         }
                     };
-
-                    if let Some(value) = instance.fields.get(&self.heap.strings[&field]) {
-                        self.stack.pop(); // instance
-                        self.stack_push(*value);
-                    } else if self.bind_method(instance.class, field) {
-                        // Just using the side effects
-                    } else {
-                        runtime_error!(self, "Undefined property '{}'.", *field);
-                        return InterpretResult::RuntimeError;
-                    }
                 }
                 OpCode::SetProperty => {
                     let field_string_id = self.read_string("SET_PROPERTY");
@@ -466,7 +478,7 @@ impl VM {
                     }
                 }
                 OpCode::BuildList => {
-                    let mut list = List::new();
+                    let mut list = List::new(*self.heap.native_classes.get("List").unwrap());
 
                     let arg_count = self.read_byte();
                     for index in (0..arg_count).rev() {
@@ -1059,18 +1071,25 @@ impl VM {
                 false
             }
             Value::Closure(_) => self.execute_call(callee, arg_count),
-            Value::NativeFunction(f) => self.execute_native_call(f, arg_count),
+            Value::NativeFunction(f) => self.execute_native_function_call(f, arg_count),
             Value::Class(class) => {
                 let maybe_initializer = class
                     .methods
                     .get(&self.heap.builtin_constants().init_string)
                     .cloned();
                 let instance_id: ValueId = self.heap.add_value(Instance::new(callee).into());
-                //Replace the class with the instance on the stack
                 let stack_index = self.stack.len() - usize::from(arg_count) - 1;
                 self.stack[stack_index] = instance_id;
                 if let Some(initializer) = maybe_initializer {
-                    self.execute_call(initializer, arg_count)
+                    if class.is_native {
+                        self.execute_native_method_call(
+                            initializer.as_native_method(),
+                            instance_id,
+                            arg_count,
+                        )
+                    } else {
+                        self.execute_call(initializer, arg_count)
+                    }
                 } else if arg_count != 0 {
                     runtime_error!(self, "Expected 0 arguments but got {arg_count}.");
                     false
@@ -1078,24 +1097,23 @@ impl VM {
                     true
                 }
             }
-            Value::BoundMethod(bound_method) => {
-                // Currently native classes only have native methods
-                if bound_method
-                    .receiver
-                    .as_instance()
-                    .class
-                    .as_class()
-                    .is_native
-                {
-                    let start_index = self.stack.len() - usize::from(arg_count);
-                    self.stack.insert(start_index, bound_method.receiver);
-                    self.execute_native_call(bound_method.method.as_native_method(), arg_count + 1)
-                } else {
+            Value::BoundMethod(bound_method) => match &*bound_method.method {
+                Value::Closure(_) => {
                     let new_stack_base = self.stack.len() - usize::from(arg_count) - 1;
                     self.stack[new_stack_base] = bound_method.receiver;
                     self.execute_call(bound_method.method, arg_count)
                 }
-            }
+                Value::NativeMethod(native_method) => {
+                    self.execute_native_method_call(native_method, bound_method.receiver, arg_count)
+                }
+                _ => {
+                    runtime_error!(
+                        self,
+                        "Native methods only bind over  closures or native methods."
+                    );
+                    false
+                }
+            },
             _ => {
                 runtime_error!(self, "Can only call functions and classes.");
                 false
@@ -1103,17 +1121,68 @@ impl VM {
         }
     }
 
-    fn execute_native_call<N>(&mut self, f: &N, arg_count: u8) -> bool
-    where
-        N: NativeCallable,
-    {
-        let arity = f.arity();
+    fn execute_native_method_call(
+        &mut self,
+        f: &NativeMethod,
+        receiver: ValueId,
+        arg_count: u8,
+    ) -> bool {
+        let arity = f.arity;
+        if !arity.contains(&arg_count) {
+            if arity.len() == 1 {
+                runtime_error!(
+                    self,
+                    "Native method '{}' of class {} expected {} argument{}, got {}.",
+                    *f.name,
+                    *receiver.class_name(),
+                    arity[0],
+                    {
+                        if arity[0] != 1 {
+                            "s"
+                        } else {
+                            ""
+                        }
+                    },
+                    arg_count
+                );
+            } else {
+                runtime_error!(
+                    self,
+                    "Native method '{}' of class {} expected any of {:?} arguments, got {}.",
+                    *f.name,
+                    *receiver.class_name(),
+                    arity,
+                    arg_count
+                );
+            };
+
+            return false;
+        }
+        let fun = f.fun;
+        let start_index = self.stack.len() - usize::from(arg_count);
+        let args = self.stack[start_index..].iter().collect::<Vec<_>>();
+        match fun(&mut self.heap, &receiver, &args) {
+            Ok(value) => {
+                self.stack
+                    .truncate(self.stack.len() - usize::from(arg_count) - 1);
+                self.stack_push(value);
+                true
+            }
+            Err(e) => {
+                runtime_error!(self, "{}", e);
+                false
+            }
+        }
+    }
+
+    fn execute_native_function_call(&mut self, f: &NativeFunction, arg_count: u8) -> bool {
+        let arity = f.arity;
         if !arity.contains(&arg_count) {
             if arity.len() == 1 {
                 runtime_error!(
                     self,
                     "Native function '{}' expected {} argument{}, got {}.",
-                    *f.name(),
+                    *f.name,
                     arity[0],
                     {
                         if arity[0] != 1 {
@@ -1128,7 +1197,7 @@ impl VM {
                 runtime_error!(
                     self,
                     "Native function '{}' expected any of {:?} arguments, got {}.",
-                    *f.name(),
+                    *f.name,
                     arity,
                     arg_count
                 );
@@ -1136,7 +1205,7 @@ impl VM {
 
             return false;
         }
-        let fun = f.fun();
+        let fun = f.fun;
         let start_index = self.stack.len() - usize::from(arg_count);
         let args = self.stack[start_index..].iter().collect::<Vec<_>>();
         match fun(&mut self.heap, &args) {
@@ -1158,7 +1227,17 @@ impl VM {
             runtime_error!(self, "Undefined property '{}'.", self.heap.strings[&method_name]);
             return false;
         };
-        self.execute_call(*method, arg_count)
+        match &**method {
+            Value::Closure(_) => self.execute_call(*method, arg_count),
+            Value::NativeMethod(native) => {
+                let receiver = *self.peek(arg_count as usize).unwrap();
+                self.execute_native_method_call(native, receiver, arg_count)
+            }
+            x => unreachable!(
+                "Can only invoke closure or native methods. Got `{}` instead.",
+                x
+            ),
+        }
     }
 
     fn invoke(&mut self, method_name: StringId, arg_count: u8) -> bool {
@@ -1173,6 +1252,8 @@ impl VM {
             } else {
                 self.invoke_from_class(instance.class, method_name, arg_count)
             }
+        } else if let Value::List(list) = &self.heap.values[receiver] {
+            self.invoke_from_class(list.class, method_name, arg_count)
         } else {
             runtime_error!(self, "Only instances have methods.");
             false
@@ -1274,11 +1355,7 @@ impl VM {
         arity: &'static [u8],
         fun: NativeFunctionImpl,
     ) {
-        let value = Value::NativeFunction(NativeFunction {
-            name,
-            arity,
-            fun,
-        });
+        let value = Value::NativeFunction(NativeFunction { name, arity, fun });
         let value_id = self.heap.add_value(value);
         self.globals.insert(
             name,
@@ -1289,16 +1366,19 @@ impl VM {
         );
     }
 
-    pub fn define_native_class(&mut self, name: StringId) {
-        let value = Value::Class(Class::new(name, true));
+    pub fn define_native_class(&mut self, name_id: StringId) {
+        let value = Value::Class(Class::new(name_id, true));
         let value_id = self.heap.add_value(value);
         self.globals.insert(
-            name,
+            name_id,
             Global {
                 value: value_id,
                 mutable: true,
             },
         );
+        self.heap
+            .native_classes
+            .insert(name_id.to_string(), value_id);
     }
 
     pub fn define_native_method(
@@ -1306,7 +1386,7 @@ impl VM {
         class: StringId,
         name: StringId,
         arity: &'static [u8],
-        fun: NativeFunctionImpl,
+        fun: NativeMethodImpl,
     ) {
         let value = Value::NativeMethod(NativeMethod {
             class,
@@ -1315,8 +1395,12 @@ impl VM {
             fun,
         });
         let value_id = self.heap.add_value(value);
-        let target_class =
-            &mut self.heap.values[&self.globals.get(&class).unwrap().value].as_class_mut();
+        let target_class = self
+            .heap
+            .native_classes
+            .get_mut(&*class)
+            .unwrap()
+            .as_class_mut();
         target_class.methods.insert(name, value_id);
     }
 
