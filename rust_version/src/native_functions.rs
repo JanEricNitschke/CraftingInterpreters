@@ -169,7 +169,6 @@ fn append_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> 
     }
 }
 
-
 fn pop_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     let index = if args.len() == 1 {
         None
@@ -220,7 +219,7 @@ fn pop_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
             if let Some(last_element) = my_list.items.pop() {
                 Ok(last_element)
             } else {
-                Err(format!("Can't 'pop' from an empty list.",))
+                Err("Can't 'pop' from an empty list.".to_string())
             }
         }
     }
@@ -269,10 +268,7 @@ fn insert_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> 
 
 fn len_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     match &heap.values[args[0]] {
-        Value::List(list) => {
-            Ok(heap
-                .add_value((list.items.len() as i64).into()))
-        }
+        Value::List(list) => Ok(heap.add_value((list.items.len() as i64).into())),
         x => Err(format!(
             "'len' expected list argument, got: `{}` instead.",
             x
@@ -404,6 +400,11 @@ impl Natives {
         vm.define_native_function(self.string_ids["len"], &[1], len_native);
 
         vm.define_native_class(self.string_ids["Array"]);
-        vm.define_native_method(self.string_ids["Array"], self.string_ids["append"], &[2], append_native);
+        vm.define_native_method(
+            self.string_ids["Array"],
+            self.string_ids["append"],
+            &[2],
+            append_native,
+        );
     }
 }

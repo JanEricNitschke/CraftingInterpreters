@@ -224,7 +224,6 @@ impl Value {
     pub fn bound_method(receiver: ValueId, method: ValueId) -> Value {
         Value::BoundMethod(BoundMethod { receiver, method })
     }
-
 }
 
 impl From<bool> for Value {
@@ -314,21 +313,16 @@ impl std::fmt::Display for Value {
                 *method.receiver,
             )),
             Value::List(list) => f.pad(&{
-                let mapped = list
-                    .items
-                    .iter()
-                    .map(|value_id| *value_id)
-                    .collect::<Vec<_>>();
-
+                let items = &list.items;
                 let mut comma_separated = String::new();
                 comma_separated.push('[');
-                if mapped.len() > 0 {
-                    for num in &mapped[0..mapped.len() - 1] {
+                if !items.is_empty() {
+                    for num in &items[0..items.len() - 1] {
                         comma_separated.push_str(&num.to_string());
                         comma_separated.push_str(", ");
                     }
 
-                    comma_separated.push_str(&mapped[mapped.len() - 1].to_string());
+                    comma_separated.push_str(&items[items.len() - 1].to_string());
                 }
                 comma_separated.push(']');
                 comma_separated
@@ -545,11 +539,14 @@ pub struct BoundMethod {
 
 impl BoundMethod {
     fn method_name(&self) -> StringId {
-        let method = &*self.method.clone();
+        let method = &*self.method;
         match method {
             Value::NativeMethod(native) => native.name,
             Value::Closure(closure) => closure.function.name,
-            x => unreachable!("Bound method only binds over closures or native methods, got `{}` instead.", x)
+            x => unreachable!(
+                "Bound method only binds over closures or native methods, got `{}` instead.",
+                x
+            ),
         }
     }
 }

@@ -13,7 +13,7 @@ use crate::{
     config,
     heap::{Heap, StringId},
     scanner::Scanner,
-    value::{NativeMethod, NativeFunction, NativeFunctionImpl, NativeCallable, Value},
+    value::{NativeCallable, NativeFunction, NativeFunctionImpl, NativeMethod, Value},
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -194,8 +194,7 @@ impl VM {
                 print!("{:?}", disassembler);
             }
             self.collect_garbage(stress_gc);
-            let my_op_code = OpCode::try_from(self.read_byte()).expect("Internal error: unrecognized opcode");
-            match my_op_code  {
+            match OpCode::try_from(self.read_byte()).expect("Internal error: unrecognized opcode") {
                 OpCode::Print => {
                     println!(
                         "{}",
@@ -1059,11 +1058,8 @@ impl VM {
                 println!("Got a native method");
                 false
             }
-            Value::Closure(_) =>  {
-                self.execute_call(callee, arg_count)},
-            Value::NativeFunction(f) => {
-                self.execute_native_call(f, arg_count)
-            }
+            Value::Closure(_) => self.execute_call(callee, arg_count),
+            Value::NativeFunction(f) => self.execute_native_call(f, arg_count),
             Value::Class(class) => {
                 let maybe_initializer = class
                     .methods
@@ -1083,31 +1079,22 @@ impl VM {
                 }
             }
             Value::BoundMethod(bound_method) => {
-                if bound_method.receiver.as_instance().class.as_class().is_native {
-
+                // Currently native classes only have native methods
+                if bound_method
+                    .receiver
+                    .as_instance()
+                    .class
+                    .as_class()
+                    .is_native
+                {
                     let start_index = self.stack.len() - usize::from(arg_count);
                     self.stack.insert(start_index, bound_method.receiver);
-                    self.execute_native_call(bound_method.method.as_native_method(), arg_count+1)
+                    self.execute_native_call(bound_method.method.as_native_method(), arg_count + 1)
                 } else {
                     let new_stack_base = self.stack.len() - usize::from(arg_count) - 1;
                     self.stack[new_stack_base] = bound_method.receiver;
                     self.execute_call(bound_method.method, arg_count)
                 }
-                // match *bound_method.method {
-                //     Value::Closure(closure) => {
-                //         let new_stack_base = self.stack.len() - usize::from(arg_count) - 1;
-                //         self.stack[new_stack_base] = bound_method.receiver;
-                //         self.execute_call(bound_method.method, arg_count)
-                //     },
-                //     Value::NativeMethod(nattive_method) => {
-                //         println!("Got native method");
-                //         false
-                //     }
-                //     x => unreachable!("Expected closure or native method in bound method call. Got `{}`", x)
-                // }
-                // let new_stack_base = self.stack.len() - usize::from(arg_count) - 1;
-                // self.stack[new_stack_base] = bound_method.receiver;
-                // self.execute_call(bound_method.method, arg_count)
             }
             _ => {
                 runtime_error!(self, "Can only call functions and classes.");
@@ -1116,9 +1103,10 @@ impl VM {
         }
     }
 
-
     fn execute_native_call<N>(&mut self, f: &N, arg_count: u8) -> bool
-    where N: NativeCallable {
+    where
+        N: NativeCallable,
+    {
         let arity = f.arity();
         if !arity.contains(&arg_count) {
             if arity.len() == 1 {
@@ -1287,7 +1275,7 @@ impl VM {
         fun: NativeFunctionImpl,
     ) {
         let value = Value::NativeFunction(NativeFunction {
-            name: name,
+            name,
             arity,
             fun,
         });
@@ -1321,13 +1309,14 @@ impl VM {
         fun: NativeFunctionImpl,
     ) {
         let value = Value::NativeMethod(NativeMethod {
-            class: class,
-            name: name,
+            class,
+            name,
             arity,
             fun,
         });
         let value_id = self.heap.add_value(value);
-        let target_class = &mut self.heap.values[&self.globals.get(&class).unwrap().value].as_class_mut();
+        let target_class =
+            &mut self.heap.values[&self.globals.get(&class).unwrap().value].as_class_mut();
         target_class.methods.insert(name, value_id);
     }
 
