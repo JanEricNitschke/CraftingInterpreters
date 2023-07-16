@@ -1,9 +1,4 @@
-use std::collections::hash_map::Entry;
-
-use crate::{
-    chunk::{ConstantLongIndex, OpCode},
-    heap::StringId,
-};
+use crate::chunk::{ConstantLongIndex, OpCode};
 
 use super::{Compiler, Local, ScopeDepth, Upvalue};
 use crate::scanner::{Token, TokenKind as TK};
@@ -131,21 +126,11 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         }
     }
 
-    pub(super) fn string_id<S>(&mut self, s: S) -> StringId
-    where
-        S: ToString,
-    {
-        match self.strings_by_name.entry(s.to_string()) {
-            Entry::Vacant(entry) => *entry.insert(self.heap.add_string(s.to_string())),
-            Entry::Occupied(entry) => *entry.get(),
-        }
-    }
-
     pub(super) fn identifier_constant<S>(&mut self, name: S) -> ConstantLongIndex
     where
         S: ToString,
     {
-        let string_id = self.string_id(name);
+        let string_id = self.heap.string_id(name);
         if let Some(index) = self.globals_by_name().get(&string_id) {
             *index
         } else {

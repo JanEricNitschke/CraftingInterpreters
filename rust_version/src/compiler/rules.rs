@@ -314,7 +314,7 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
     fn string(&mut self, _can_assign: bool) {
         let lexeme = self.previous.as_ref().unwrap().as_str();
         let value = lexeme[1..lexeme.len() - 1].to_string();
-        let string_id = self.string_id(&value);
+        let string_id = self.heap.string_id(&value);
         self.emit_constant(string_id);
     }
 

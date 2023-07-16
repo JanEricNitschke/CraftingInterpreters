@@ -162,7 +162,6 @@ impl VM {
 
         let result = if let Some(function) = compiler.compile() {
             natives.define_natives(self);
-
             let function_id = self.heap.add_function(function);
             let closure = Value::closure(function_id);
             let value_id = self.heap.add_value(closure);
@@ -597,7 +596,7 @@ impl VM {
                 (Value::String(a), Value::String(b)) => {
                     // This could be optimized by allowing mutations via the heap
                     let new_string = format!("{}{}", self.heap.strings[a], self.heap.strings[b]);
-                    let new_string_id = self.heap.add_string(new_string);
+                    let new_string_id = self.heap.string_id(new_string);
                     self.stack.pop();
                     self.stack.pop();
                     self.stack_push_value(new_string_id.into());
@@ -1416,7 +1415,8 @@ impl VM {
         for value in &self.stack {
             self.heap.mark_value(value);
         }
-        for value in self.globals.values() {
+        for (key, value) in self.globals.iter() {
+            self.heap.mark_string(key);
             self.heap.mark_value(&value.value);
         }
         for frame in self.callstack.iter() {

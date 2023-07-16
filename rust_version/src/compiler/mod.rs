@@ -107,7 +107,6 @@ impl<'scanner> NestableState<'scanner> {
 
 pub struct Compiler<'scanner, 'heap> {
     heap: &'heap mut Heap,
-    strings_by_name: HashMap<String, StringId>,
 
     rules: Rules<'scanner, 'heap>,
 
@@ -125,14 +124,10 @@ pub struct Compiler<'scanner, 'heap> {
 impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
     #[must_use]
     pub fn new(scanner: Scanner<'scanner>, heap: &'heap mut Heap) -> Self {
-        let function_name = heap.add_string(String::from("<script>"));
+        let function_name = heap.string_id(String::from("<script>"));
 
-        let mut strings_by_name: HashMap<String, StringId> = HashMap::default();
-        let init_string = heap.builtin_constants().init_string;
-        strings_by_name.insert(init_string.to_string(), init_string);
         Compiler {
             heap,
-            strings_by_name,
             scanner,
             previous: None,
             current: None,
@@ -148,7 +143,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
     where
         S: ToString,
     {
-        let function_name = self.string_id(function_name);
+        let function_name = self.heap.string_id(function_name);
         self.nestable_state
             .push(NestableState::new(function_name, function_type));
     }
@@ -267,7 +262,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
 
     pub fn inject_strings(&mut self, names: &HashMap<String, StringId>) {
         for (key, value) in names {
-            self.strings_by_name.insert(key.clone(), *value);
+            self.heap.strings_by_name.insert(key.clone(), *value);
         }
     }
 
