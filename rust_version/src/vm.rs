@@ -446,7 +446,14 @@ impl VM {
                 OpCode::Inherit => {
                     let superclass_id = self.peek(1).expect("Stack underflow in OP_INHERIT");
                     let superclass = match &self.heap.values[superclass_id] {
-                        Value::Class(superclass) => superclass,
+                        Value::Class(superclass) => {
+                            if superclass.is_native {
+                                runtime_error!(self, "Can not inherit from native classes yet.");
+                                return InterpretResult::RuntimeError;
+                            } else {
+                                superclass
+                            }
+                        }
                         _ => {
                             runtime_error!(self, "Superclass must be a class.");
                             return InterpretResult::RuntimeError;
