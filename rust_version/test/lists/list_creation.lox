@@ -5,7 +5,9 @@ my_list = [1, "Test", nil];
 print(my_list); # expect: [1, Test, nil]
 
 fun fib(n) {
-  if (n < 2) return n;
+  if (n < 2) {
+    return n;
+  }
   return fib(n - 2) + fib(n - 1);
 }
 

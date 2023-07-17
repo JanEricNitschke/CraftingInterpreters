@@ -1,6 +1,8 @@
 # Single-expression body.
 var c = 0;
-until (c == 3) print(c = c + 1);
+until (c == 3) {
+  print(c = c + 1);
+}
 # expect: 1
 # expect: 2
 # expect: 3
@@ -16,6 +18,20 @@ until (a == 3) {
 # expect: 2
 
 # Statement bodies.
-until (true) if (true) 1; else 2;
-until (true) while (true) 1;
-until (true) for (;;) 1;
+until (true) {
+  if (true) {
+    1;
+  } else {
+    2;
+  }
+}
+until (true) {
+  while (true) {
+    1;
+  }
+}
+until (true) {
+  for (;;) {
+    1;
+  }
+}

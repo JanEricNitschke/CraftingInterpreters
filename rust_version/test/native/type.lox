@@ -3,7 +3,9 @@ print(type(3.2)); # expect: <type float>
 print(type("Test")); # expect: <type string>
 
 fun fib(n) {
-  if (n < 2) return n;
+  if (n < 2) {
+    return n;
+  }
   return fib(n - 2) + fib(n - 1);
 }
 

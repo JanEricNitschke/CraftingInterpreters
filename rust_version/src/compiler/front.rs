@@ -74,6 +74,12 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
         self.consume(TK::RightBrace, "Expect '}' after block.")
     }
 
+    fn scoped_block(&mut self) {
+        self.begin_scope();
+        self.block();
+        self.end_scope();
+    }
+
     fn function(&mut self, function_type: FunctionType) {
         let line = self.line();
         let function_name = self.previous.as_ref().unwrap().as_str().to_string();
@@ -294,9 +300,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
         } else if self.match_(TK::Break) {
             self.break_statement();
         } else if self.match_(TK::LeftBrace) {
-            self.begin_scope();
-            self.block();
-            self.end_scope();
+            self.scoped_block();
         } else {
             self.expression_statement();
         }
@@ -304,9 +308,10 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
 
     fn conditional_statement(&mut self, if_statement: bool) {
         let line = self.line();
-        self.consume(TK::LeftParen, "Expect '(' after 'if'.");
+
         self.expression();
-        self.consume(TK::RightParen, "Expect ')' after condition");
+
+        self.consume(TK::LeftBrace, "Expect '{' after condition");
 
         let then_jump = self.emit_jump(if if_statement {
             OpCode::JumpIfFalse
@@ -314,13 +319,14 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
             OpCode::JumpIfTrue
         });
         self.emit_byte(OpCode::Pop, line);
-        self.statement();
+        self.scoped_block();
 
         let else_jump = self.emit_jump(OpCode::Jump);
         self.patch_jump(then_jump);
         self.emit_byte(OpCode::Pop, line);
         if self.match_(TK::Else) {
-            self.statement()
+            self.consume(TK::LeftBrace, "Expect '{' after else");
+            self.scoped_block();
         }
 
         self.patch_jump(else_jump);
@@ -356,9 +362,9 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
                 }),
             )
         };
-        self.consume(TK::LeftParen, "Expect '(' after 'while'.");
+
         self.expression();
-        self.consume(TK::RightParen, "Expect ')' after condition.");
+        self.consume(TK::LeftBrace, "Expect '{' after condition.");
 
         let exit_jump = self.emit_jump(if while_statement {
             OpCode::JumpIfFalse
@@ -366,7 +372,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
             OpCode::JumpIfTrue
         });
         self.emit_byte(OpCode::Pop, line);
-        self.statement();
+        self.scoped_block();
         let loop_start = self.loop_state().as_ref().unwrap().start;
         self.emit_loop(loop_start);
 
@@ -456,7 +462,9 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
                 None
             };
 
-        self.statement();
+
+        self.consume(TK::LeftBrace, "Expect '{' before loop body.");
+        self.scoped_block();
 
         // Clean up alias for loop variable
         if let Some((loop_var, inner_var)) = loop_and_inner_var {
@@ -481,9 +489,9 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
     }
 
     fn switch_statement(&mut self) {
-        self.consume(TK::LeftParen, "Expect '(' after 'switch'");
+
         self.expression();
-        self.consume(TK::RightParen, "Expect ')' after 'switch' value.");
+
         self.consume(TK::LeftBrace, "Expect '{' before 'switch' body.");
 
         let mut end_jumps = vec![];
