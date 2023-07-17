@@ -1,5 +1,7 @@
 use rand::Rng;
 use std::io;
+use std::thread;
+use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rustc_hash::FxHashMap as HashMap;
@@ -19,6 +21,14 @@ fn clock_native(heap: &mut Heap, _args: &[&ValueId]) -> Result<ValueId, String> 
             .as_secs_f64()
             .into(),
     )))
+}
+
+fn sleep_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
+    match &heap.values[args[0]] {
+        Value::Number(Number::Integer(n)) => thread::sleep(Duration::from_secs(*n as u64)),
+        x => {return Err(format!("'sleep' expected integer argument, got: `{}`", *x));},
+    };
+    Ok(heap.builtin_constants().nil)
 }
 
 fn sqrt_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
@@ -383,7 +393,7 @@ impl Natives {
 
     pub fn create_names(&mut self, heap: &mut Heap) {
         for name in [
-            "clock", "sqrt", "input", "float", "int", "str", "type", "getattr", "setattr",
+            "clock", "sleep", "sqrt", "input", "float", "int", "str", "type", "getattr", "setattr",
             "hasattr", "delattr", "rng", "print", "append", "pop", "insert", "len", "List",
         ] {
             let string_id = heap.string_id(name.to_string());
@@ -397,6 +407,7 @@ impl Natives {
 
     pub fn define_natives(&self, vm: &mut VM) {
         vm.define_native_function(self.string_ids["clock"], &[0], clock_native);
+        vm.define_native_function(self.string_ids["sleep"], &[1], sleep_native);
         vm.define_native_function(self.string_ids["sqrt"], &[1], sqrt_native);
         vm.define_native_function(self.string_ids["input"], &[1], input_native);
         vm.define_native_function(self.string_ids["float"], &[1], to_float_native);
