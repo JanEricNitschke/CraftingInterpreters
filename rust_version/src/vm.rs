@@ -1072,6 +1072,7 @@ impl VM {
             Value::Closure(_) => self.execute_call(callee, arg_count),
             Value::NativeFunction(f) => self.execute_native_function_call(f, arg_count),
             Value::Class(class) => {
+                let is_native = class.is_native;
                 let maybe_initializer = class
                     .methods
                     .get(&self.heap.builtin_constants().init_string)
@@ -1080,7 +1081,7 @@ impl VM {
                 let stack_index = self.stack.len() - usize::from(arg_count) - 1;
                 self.stack[stack_index] = instance_id;
                 if let Some(initializer) = maybe_initializer {
-                    if class.is_native {
+                    if is_native {
                         self.execute_native_method_call(
                             initializer.as_native_method(),
                             instance_id,
