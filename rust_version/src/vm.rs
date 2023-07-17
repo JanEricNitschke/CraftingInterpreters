@@ -1434,7 +1434,7 @@ impl VM {
         // Trace references
         self.heap.trace();
 
-        // Remove references to unmarked strings in `self.globals`
+        // Remove references to unmarked strings in `self.globals` and `self.heap.strings_by_name`
         let globals_to_remove = self
             .globals
             .keys()
@@ -1444,6 +1444,7 @@ impl VM {
         for id in globals_to_remove {
             self.globals.remove(&id);
         }
+        self.heap.strings_by_name.retain(|_, string_id|!string_id.marked(black_value));
 
         // Finally, sweep
         self.heap.sweep();

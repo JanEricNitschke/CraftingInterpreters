@@ -449,6 +449,5 @@ impl Natives {
             &[2],
             insert_native,
         );
-        // vm.define_native_method(self.string_ids["List"],self.string_ids["len"], &[0], len_native);
     }
 }

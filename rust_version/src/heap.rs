@@ -544,7 +544,7 @@ impl Heap {
         let before = self.bytes_allocated();
         self.values.sweep(self.black_value);
         self.functions.sweep(self.black_value);
-        // self.strings.sweep(self.black_value);
+        self.strings.sweep(self.black_value);
         self.black_value = !self.black_value;
 
         self.next_gc = self.bytes_allocated() * crate::config::GC_HEAP_GROW_FACTOR;
