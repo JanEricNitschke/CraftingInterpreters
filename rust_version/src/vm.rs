@@ -346,11 +346,9 @@ impl VM {
                 }
                 OpCode::SetUpvalue => {
                     let upvalue_index = usize::from(self.read_byte());
-                    let upvalue_location = (*self.callstack.closure()).as_closure().upvalues
-                        [upvalue_index]
-                        .upvalue_location()
-                        // TODO get rid of this `.clone()`
-                        .clone();
+                    let closure = self.callstack.closure();
+                    let upvalue_location =
+                        closure.as_closure().upvalues[upvalue_index].upvalue_location();
                     let new_value = self
                         .stack
                         .last()
@@ -358,7 +356,7 @@ impl VM {
                         .expect("Stack underflow in OP_SET_UPVALUE");
                     match upvalue_location {
                         Upvalue::Open(absolute_local_index) => {
-                            *self.stack[absolute_local_index] = new_value;
+                            *self.stack[*absolute_local_index] = new_value;
                         }
                         Upvalue::Closed(mut value_id) => {
                             *value_id = new_value;
@@ -1075,8 +1073,7 @@ impl VM {
                 let is_native = class.is_native;
                 let maybe_initializer = class
                     .methods
-                    .get(&self.heap.builtin_constants().init_string)
-                    .cloned();
+                    .get(&self.heap.builtin_constants().init_string);
                 let instance_id: ValueId = self.heap.add_value(Instance::new(callee).into());
                 let stack_index = self.stack.len() - usize::from(arg_count) - 1;
                 self.stack[stack_index] = instance_id;
@@ -1088,7 +1085,7 @@ impl VM {
                             arg_count,
                         )
                     } else {
-                        self.execute_call(initializer, arg_count)
+                        self.execute_call(*initializer, arg_count)
                     }
                 } else if arg_count != 0 {
                     runtime_error!(self, "Expected 0 arguments but got {arg_count}.");

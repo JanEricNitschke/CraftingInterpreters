@@ -322,9 +322,6 @@ impl Heap {
         for number in self.builtin_constants().floats.clone() {
             self.values.mark(&number, self.black_value);
         }
-        // for class in self.native_classes.values() {
-        //     self.values.mark(class, self.black_value);
-        // }
     }
 
     pub fn trace(&mut self) {

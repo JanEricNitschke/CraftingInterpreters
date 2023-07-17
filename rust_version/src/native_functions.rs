@@ -44,7 +44,7 @@ fn sqrt_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
 fn input_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     match &heap.values[args[0]] {
         Value::String(prompt) => {
-            println!("{}", &heap.strings[prompt].clone());
+            println!("{}", &heap.strings[prompt]);
             let mut choice = String::new();
             match io::stdin().read_line(&mut choice) {
                 Ok(_) => {
@@ -137,16 +137,16 @@ fn type_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
 fn print_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     let end = if args.len() == 2 {
         match &heap.values[args[1]] {
-            Value::String(string_id) => heap.strings[string_id].clone(),
+            Value::String(string_id) => &heap.strings[string_id],
             x => {
                 return Err(format!(
-                    "Option second argument to 'print' has to be a string, got: {}",
+                    "Optional second argument to 'print' has to be a string, got: {}",
                     x
                 ))
             }
         }
     } else {
-        "\n".to_string()
+        "\n"
     };
     let value = &heap.values[args[0]];
     print!("{}{}", value, end);
@@ -307,8 +307,8 @@ fn getattr_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String>
     match (&heap.values[args[0]], &heap.values[args[1]]) {
         (Value::Instance(instance), Value::String(string_id)) => {
             let field = &heap.strings[string_id];
-            match instance.fields.get(field).cloned() {
-                Some(value_id) => Ok(value_id),
+            match instance.fields.get(field) {
+                Some(value_id) => Ok(*value_id),
                 None => Err(format!("Undefined property '{}'.", *field)),
             }
         }
@@ -361,9 +361,9 @@ fn hasattr_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String>
 
 fn delattr_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     if let Value::String(string_id) = &heap.values[args[1]] {
-        let field = heap.strings[string_id].clone();
+        let field = &heap.strings[string_id];
         if let Value::Instance(instance) = &mut heap.values[args[0]] {
-            match instance.fields.remove(&field) {
+            match instance.fields.remove(field) {
                 Some(_) => Ok(heap.builtin_constants().nil),
                 None => Err(format!("Undefined property '{}'.", field)),
             }
