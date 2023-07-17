@@ -26,7 +26,9 @@ fn clock_native(heap: &mut Heap, _args: &[&ValueId]) -> Result<ValueId, String> 
 fn sleep_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     match &heap.values[args[0]] {
         Value::Number(Number::Integer(n)) => thread::sleep(Duration::from_secs(*n as u64)),
-        x => {return Err(format!("'sleep' expected integer argument, got: `{}`", *x));},
+        x => {
+            return Err(format!("'sleep' expected integer argument, got: `{}`", *x));
+        }
     };
     Ok(heap.builtin_constants().nil)
 }

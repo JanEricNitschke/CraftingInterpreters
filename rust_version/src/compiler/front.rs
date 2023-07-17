@@ -210,7 +210,12 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
     }
 
     fn continue_statement(&mut self) {
-        match self.loop_state().clone() {
+        // Better alternative to cloning it and then setting it back because
+        // LoopState does not implement copy because of the contained vector
+        // Even though that vector is not actuall used here.
+        // Could possibly also do map over the Some content here.
+        let loop_state = self.loop_state_mut().take();
+        match loop_state {
             None => self.error("'continue' outside a loop."),
             Some(state) => {
                 let line = self.line();
@@ -226,12 +231,16 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
                     self.emit_byte(OpCode::Pop, line);
                 }
                 self.emit_loop(state.start);
+                *self.loop_state_mut() = Some(state);
             }
         }
     }
 
     fn break_statement(&mut self) {
-        match self.loop_state().clone() {
+        // Better alternative to cloning it and then setting it back because
+        // LoopState does not implement copy because of the contained vector
+        let loop_state = self.loop_state_mut().take();
+        match loop_state {
             None => self.error("'break' outside a loop."),
             Some(mut state) => {
                 let line = self.line();
