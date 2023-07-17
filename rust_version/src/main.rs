@@ -1,3 +1,10 @@
+#![warn(
+    clippy::all,
+    // clippy::restriction,
+    clippy::pedantic,
+    // clippy::nursery,
+)]
+
 use std::{io::Write, path::PathBuf};
 
 use clap::Parser;

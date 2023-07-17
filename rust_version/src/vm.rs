@@ -1444,7 +1444,9 @@ impl VM {
         for id in globals_to_remove {
             self.globals.remove(&id);
         }
-        self.heap.strings_by_name.retain(|_, string_id|!string_id.marked(black_value));
+        self.heap
+            .strings_by_name
+            .retain(|_, string_id| !string_id.marked(black_value));
 
         // Finally, sweep
         self.heap.sweep();

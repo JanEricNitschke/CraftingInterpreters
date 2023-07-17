@@ -20,6 +20,11 @@ jobs:
     - name: Build
       working-directory: rust_version
       run: cargo build --verbose
+    - name: Lint
+      working-directory: rust_version
+      run: |
+        rustup component add clippy
+        cargo clippy -- -D warnings
     - name: Test
       working-directory: rust_version
       run: cargo test --verbose

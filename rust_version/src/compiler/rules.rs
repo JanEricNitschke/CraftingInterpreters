@@ -331,9 +331,8 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
                 if item_count == 255 {
                     self.error("Can't have more than 255 items in a list literal.");
                     break;
-                } else {
-                    item_count += 1;
                 }
+                item_count += 1;
                 if !self.match_(TK::Comma) {
                     break;
                 }

@@ -462,7 +462,6 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
                 None
             };
 
-
         self.consume(TK::LeftBrace, "Expect '{' before loop body.");
         self.scoped_block();
 
@@ -489,7 +488,6 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
     }
 
     fn switch_statement(&mut self) {
-
         self.expression();
 
         self.consume(TK::LeftBrace, "Expect '{' before 'switch' body.");
