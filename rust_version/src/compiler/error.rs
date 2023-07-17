@@ -22,7 +22,7 @@ impl<'compiler, 'arena> Compiler<'compiler, 'arena> {
             } else if token.kind != TK::Error {
                 eprint!(" at '{}'", token.as_str())
             }
-            eprintln!(": {}", msg);
+            eprintln!(": {msg}");
         }
         self.had_error = true;
     }

@@ -194,7 +194,7 @@ impl VM {
                         .collect::<Vec<_>>()
                         .join(" ][ ")
                 );
-                print!("{:?}", disassembler);
+                print!("{disassembler:?}");
             }
             self.collect_garbage(stress_gc);
             match OpCode::try_from(self.read_byte()).expect("Internal error: unrecognized opcode") {
@@ -315,8 +315,7 @@ impl VM {
                         let is_local = self.read_byte();
                         debug_assert!(
                             is_local == 0 || is_local == 1,
-                            "'is_local` must be 0 or 1, got {}",
-                            is_local
+                            "'is_local` must be 0 or 1, got {is_local}"
                         );
                         let is_local = is_local == 1;
 
@@ -732,19 +731,17 @@ impl VM {
                 return Some(InterpretResult::RuntimeError);
             }
         };
-        let result = match list.items.get(index) {
-            Some(value) => value,
-            None => {
-                runtime_error!(
-                    self,
-                    "Index `{}` is out of bounds of list  with len `{}`.",
-                    index,
-                    list.items.len()
-                );
-                return Some(InterpretResult::RuntimeError);
-            }
+        let Some(value) = list.items.get(index) else {
+            runtime_error!(
+                self,
+                "Index `{}` is out of bounds of list  with len `{}`.",
+                index,
+                list.items.len()
+            );
+            return Some(InterpretResult::RuntimeError);
         };
-        self.stack_push(*result);
+
+        self.stack_push(*value);
         None
     }
 
@@ -758,9 +755,10 @@ impl VM {
             .pop()
             .expect("Stack underflow in OP_STORE_SUBSCRIPT")]
         {
-            Value::Number(Number::Integer(n)) => match usize::try_from(*n) {
-                Ok(value) => value,
-                Err(_) => {
+            Value::Number(Number::Integer(n)) => {
+                if let Ok(value) = usize::try_from(*n) {
+                    value
+                } else {
                     runtime_error!(
                         self,
                         "Can not index into list with negative or too large numbers, got `{}`.",
@@ -768,7 +766,8 @@ impl VM {
                     );
                     return Some(InterpretResult::RuntimeError);
                 }
-            },
+            }
+
             x => {
                 runtime_error!(self, "Can only index into list with integer, got `{}`.", x);
                 return Some(InterpretResult::RuntimeError);
@@ -823,14 +822,16 @@ impl VM {
         let constant_index = self.read_constant_index(op == OpCode::GetGlobalLong);
         let constant_value = self.read_constant_value(constant_index);
         match &self.heap.values[&constant_value] {
-            Value::String(name) => match self.globals.get(name) {
-                Some(global) => self.stack_push(global.value),
-                None => {
+            Value::String(name) => {
+                if let Some(global) = self.globals.get(name) {
+                    self.stack_push(global.value);
+                } else {
                     runtime_error!(self, "Undefined variable '{}'.", self.heap.strings[name]);
                     return Some(InterpretResult::RuntimeError);
                 }
-            },
-            x => panic!("Internal error: non-string operand to {:?}: {:?}", op, x),
+            }
+
+            x => panic!("Internal error: non-string operand to {op:?}: {x:?}"),
         }
         None
     }
@@ -840,10 +841,7 @@ impl VM {
         let constant_value = self.read_constant_value(constant_index);
         let name = match &self.heap.values[&constant_value] {
             Value::String(name) => *name,
-            x => panic!(
-                "Internal error: non-string operand to OP_SET_GLOBAL: {:?}",
-                x
-            ),
+            x => panic!("Internal error: non-string operand to OP_SET_GLOBAL: {x:?}"),
         };
 
         if let Some(global) = self.globals.get_mut(&name) {
@@ -854,7 +852,7 @@ impl VM {
             global.value = *self
                 .stack
                 .last()
-                .unwrap_or_else(|| panic!("stack underflow in {:?}", op));
+                .unwrap_or_else(|| panic!("stack underflow in {op:?}"));
         } else {
             runtime_error!(self, "Undefined variable '{}'.", *name);
             return Some(InterpretResult::RuntimeError);
@@ -874,14 +872,14 @@ impl VM {
                         value: *self
                             .stack
                             .last()
-                            .unwrap_or_else(|| panic!("stack underflow in {:?}", op)),
+                            .unwrap_or_else(|| panic!("stack underflow in {op:?}")),
                         mutable: op != OpCode::DefineGlobalConst
                             && op != OpCode::DefineGlobalConstLong,
                     },
                 );
                 self.stack.pop();
             }
-            x => panic!("Internal error: non-string operand to {:?}: {:?}", op, x),
+            x => panic!("Internal error: non-string operand to {op:?}: {x:?}"),
         }
     }
 
@@ -947,15 +945,12 @@ impl VM {
     fn negate(&mut self) -> Option<InterpretResult> {
         let value_id = *self.peek(0).expect("stack underflow in OP_NEGATE");
         let value = &self.heap.values[&value_id];
-        match value {
-            Value::Number(n) => {
-                self.stack.pop();
-                self.stack_push_value((-*n).into());
-            }
-            _ => {
-                runtime_error!(self, "Operand must be a number.");
-                return Some(InterpretResult::RuntimeError);
-            }
+        if let Value::Number(n) = value {
+            self.stack.pop();
+            self.stack_push_value((-*n).into());
+        } else {
+            runtime_error!(self, "Operand must be a number.");
+            return Some(InterpretResult::RuntimeError);
         }
         None
     }
@@ -966,7 +961,7 @@ impl VM {
             .pop()
             .expect("Stack underflow in OP_NOT.")
             .is_falsey();
-        self.stack_push(self.heap.builtin_constants().bool(value))
+        self.stack_push(self.heap.builtin_constants().bool(value));
     }
 
     fn equal(&mut self) {
@@ -1141,10 +1136,10 @@ impl VM {
                     *receiver.class_name(),
                     arity[0],
                     {
-                        if arity[0] != 1 {
-                            "s"
-                        } else {
+                        if arity[0] == 1 {
                             ""
+                        } else {
+                            "s"
                         }
                     },
                     arg_count
@@ -1189,10 +1184,10 @@ impl VM {
                     *f.name,
                     arity[0],
                     {
-                        if arity[0] != 1 {
-                            "s"
-                        } else {
+                        if arity[0] == 1 {
                             ""
+                        } else {
+                            "s"
                         }
                     },
                     arg_count
@@ -1306,8 +1301,7 @@ impl VM {
         while self
             .open_upvalues
             .get(0)
-            .map(|v| v.upvalue_location().as_open() >= last)
-            .unwrap_or(false)
+            .map_or(false, |v| v.upvalue_location().as_open() >= last)
         {
             let mut upvalue = self.open_upvalues.pop_front().unwrap();
             debug_assert!(matches!(*upvalue, Value::Upvalue(_)));
@@ -1326,10 +1320,10 @@ impl VM {
                 "Expected {} argument{} but got {}.",
                 arity,
                 {
-                    if arity != 1 {
-                        "s"
-                    } else {
+                    if arity == 1 {
                         ""
+                    } else {
+                        "s"
                     }
                 },
                 arg_count
@@ -1420,7 +1414,7 @@ impl VM {
         for value in &self.stack {
             self.heap.mark_value(value);
         }
-        for (key, value) in self.globals.iter() {
+        for (key, value) in &self.globals {
             self.heap.mark_string(key);
             self.heap.mark_value(&value.value);
         }
@@ -1439,7 +1433,7 @@ impl VM {
             .globals
             .keys()
             .filter(|string_id| !string_id.marked(black_value))
-            .cloned()
+            .copied()
             .collect::<Vec<_>>();
         for id in globals_to_remove {
             self.globals.remove(&id);

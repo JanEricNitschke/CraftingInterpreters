@@ -89,7 +89,7 @@ pub enum TokenKind {
 
 impl std::fmt::Display for TokenKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.pad(&format!("{:?}", self))
+        f.pad(&format!("{self:?}"))
     }
 }
 
@@ -279,7 +279,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn string(&mut self) -> Token<'a> {
-        while self.peek().map(|c| c != &b'"').unwrap_or(false) {
+        while self.peek().map_or(false, |c| c != &b'"') {
             if self.peek() == Some(&b'\n') {
                 *self.line += 1;
             }
@@ -294,19 +294,14 @@ impl<'a> Scanner<'a> {
     }
 
     fn number(&mut self) -> Token<'a> {
-        while self.peek().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+        while self.peek().map_or(false, u8::is_ascii_digit) {
             self.advance();
         }
 
         // Fractions
-        if self.peek() == Some(&b'.')
-            && self
-                .peek_next()
-                .map(|c| c.is_ascii_digit())
-                .unwrap_or(false)
-        {
+        if self.peek() == Some(&b'.') && self.peek_next().map_or(false, u8::is_ascii_digit) {
             self.advance();
-            while self.peek().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+            while self.peek().map_or(false, u8::is_ascii_digit) {
                 self.advance();
             }
         } else {
@@ -321,7 +316,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn identifier(&mut self) -> Token<'a> {
-        while self.peek().map(Self::is_identifier_char).unwrap_or(false) {
+        while self.peek().map_or(false, Self::is_identifier_char) {
             self.advance();
         }
         let token_kind = self.identifier_type();
@@ -392,8 +387,7 @@ impl<'a> Scanner<'a> {
             && self
                 .source
                 .get(to)
-                .map(|c| !Self::is_identifier_char(c))
-                .unwrap_or(true)
+                .map_or(true, |c| !Self::is_identifier_char(c))
         {
             kind
         } else {

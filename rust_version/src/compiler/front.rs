@@ -50,16 +50,11 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
     }
 
     pub(super) fn check(&self, kind: TK) -> bool {
-        self.current_token_kind()
-            .map(|k| k == kind)
-            .unwrap_or(false)
+        self.current_token_kind().map_or(false, |k| k == kind)
     }
 
     pub(super) fn check_previous(&self, kind: TK) -> bool {
-        self.previous
-            .as_ref()
-            .map(|t| t.kind == kind)
-            .unwrap_or(false)
+        self.previous.as_ref().map_or(false, |t| t.kind == kind)
     }
 
     pub(super) fn expression(&mut self) {

@@ -59,7 +59,7 @@ struct Item<T> {
 
 impl<T> Item<T> {
     fn new(item: T, marked: bool) -> Self {
-        Self { item, marked }
+        Self { marked, item }
     }
 }
 

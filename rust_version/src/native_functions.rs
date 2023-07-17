@@ -51,10 +51,10 @@ fn input_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
                     let string = Value::String(heap.string_id(choice.trim().to_string()));
                     Ok(heap.add_value(string))
                 }
-                Err(e) => Err(format!("'input' could not read line: {}", e)),
+                Err(e) => Err(format!("'input' could not read line: {e}")),
             }
         }
-        x => Err(format!("'input' expected string argument, got: {}", x)),
+        x => Err(format!("'input' expected string argument, got: {x}")),
     }
 }
 
@@ -66,16 +66,14 @@ fn to_float_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String
             match converted {
                 Ok(result) => Ok(heap.add_value(Value::Number(result.into()))),
                 Err(_) => Err(format!(
-                    "'float' could not convert string '{}' to a float.",
-                    string
+                    "'float' could not convert string '{string}' to a float."
                 )),
             }
         }
         Value::Number(n) => Ok(heap.add_value(Value::Number(f64::from(*n).into()))),
         Value::Bool(value) => Ok(heap.add_value(Value::Number(f64::from(*value).into()))),
         x => Err(format!(
-            "'float' expected string, number or bool argument, got: {}",
-            x
+            "'float' expected string, number or bool argument, got: {x}"
         )),
     }
 }
@@ -88,16 +86,14 @@ fn to_int_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> 
             match converted {
                 Ok(result) => Ok(heap.add_value(Value::Number(result.into()))),
                 Err(_) => Err(format!(
-                    "'int' could not convert string '{}' to an integer.",
-                    string
+                    "'int' could not convert string '{string}' to an integer."
                 )),
             }
         }
         Value::Number(n) => Ok(heap.add_value(Value::Number(i64::from(*n).into()))),
         Value::Bool(value) => Ok(heap.add_value(Value::Number(i64::from(*value).into()))),
         x => Err(format!(
-            "'int' expected string, number or bool argument, got: {}",
-            x
+            "'int' expected string, number or bool argument, got: {x}"
         )),
     }
 }
@@ -140,8 +136,7 @@ fn print_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
             Value::String(string_id) => &heap.strings[string_id],
             x => {
                 return Err(format!(
-                    "Optional second argument to 'print' has to be a string, got: {}",
-                    x
+                    "Optional second argument to 'print' has to be a string, got: {x}"
                 ))
             }
         }
@@ -149,7 +144,7 @@ fn print_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
         "\n"
     };
     let value = &heap.values[args[0]];
-    print!("{}{}", value, end);
+    print!("{value}{end}");
     Ok(heap.builtin_constants().nil)
 }
 
@@ -160,8 +155,7 @@ fn rng_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
                 rand::thread_rng().gen_range(*min..=*max).into(),
             ))),
         (other_1, other_2) => Err(format!(
-            "'rng' expected two integers as arguments, got: `{}` and `{}` instead.",
-            other_1, other_2
+            "'rng' expected two integers as arguments, got: `{other_1}` and `{other_2}` instead."
         )),
     }
 }
@@ -186,8 +180,7 @@ fn append_native(
             Ok(heap.builtin_constants().nil)
         }
         x => Err(format!(
-            "'append' expects its first argument to be a list, got `{}` instead.",
-            x
+            "'append' expects its first argument to be a list, got `{x}` instead."
         )),
     }
 }
@@ -201,16 +194,12 @@ fn pop_native(heap: &mut Heap, receiver: &ValueId, args: &[&ValueId]) -> Result<
                 Ok(index) => index,
                 Err(_) => {
                     return Err(format!(
-                        "Can not index into list with negative or too large numbers, got `{}`.",
-                        n
+                        "Can not index into list with negative or too large numbers, got `{n}`."
                     ));
                 }
             },
             x => {
-                return Err(format!(
-                    "Can only index into list with integer, got `{}`.",
-                    x
-                ));
+                return Err(format!("Can only index into list with integer, got `{x}`."));
             }
         };
         Some(index)
@@ -220,8 +209,7 @@ fn pop_native(heap: &mut Heap, receiver: &ValueId, args: &[&ValueId]) -> Result<
         Value::List(list) => list,
         x => {
             return Err(format!(
-                "'pop' expects its first argument to be a list, got `{}` instead.",
-                x
+                "'pop' expects its first argument to be a list, got `{x}` instead."
             ))
         }
     };
@@ -231,8 +219,7 @@ fn pop_native(heap: &mut Heap, receiver: &ValueId, args: &[&ValueId]) -> Result<
             let length = my_list.items.len();
             if index >= length {
                 Err(format!(
-                    "Index `{}` is out of bounds of list with len `{}`.",
-                    index, length
+                    "Index `{index}` is out of bounds of list with len `{length}`."
                 ))
             } else {
                 Ok(my_list.items.remove(index))
@@ -258,16 +245,12 @@ fn insert_native(
             Ok(index) => index,
             Err(_) => {
                 return Err(format!(
-                    "Can not index into list with negative or too large numbers, got `{}`.",
-                    n
+                    "Can not index into list with negative or too large numbers, got `{n}`."
                 ));
             }
         },
         x => {
-            return Err(format!(
-                "Can only index into list with integer, got `{}`.",
-                x
-            ));
+            return Err(format!("Can only index into list with integer, got `{x}`."));
         }
     };
 
@@ -275,8 +258,7 @@ fn insert_native(
         Value::List(list) => list,
         x => {
             return Err(format!(
-                "'insert' expects its first argument to be a list, got `{}` instead.",
-                x
+                "'insert' expects its first argument to be a list, got `{x}` instead."
             ))
         }
     };
@@ -284,8 +266,7 @@ fn insert_native(
     let length = my_list.items.len();
     if index > length {
         Err(format!(
-            "Index `{}` is out of bounds of list with len `{}`.",
-            index, length
+            "Index `{index}` is out of bounds of list with len `{length}`."
         ))
     } else {
         my_list.items.insert(index, *args[1]);
@@ -296,10 +277,7 @@ fn insert_native(
 fn len_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     match &heap.values[args[0]] {
         Value::List(list) => Ok(heap.add_value((list.items.len() as i64).into())),
-        x => Err(format!(
-            "'len' expected list argument, got: `{}` instead.",
-            x
-        )),
+        x => Err(format!("'len' expected list argument, got: `{x}` instead.")),
     }
 }
 
@@ -313,12 +291,10 @@ fn getattr_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String>
             }
         }
         (instance @ Value::Instance(_), x) => Err(format!(
-            "`getattr` can only index with string indexes, got: `{}` (instance: `{}`)",
-            x, instance
+            "`getattr` can only index with string indexes, got: `{x}` (instance: `{instance}`)"
         )),
         (not_instance, _) => Err(format!(
-            "`getattr` only works on instances, got `{}`",
-            not_instance
+            "`getattr` only works on instances, got `{not_instance}`"
         )),
     }
 }
@@ -349,12 +325,10 @@ fn hasattr_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String>
             .builtin_constants()
             .bool(instance.fields.contains_key(&heap.strings[string_id]))),
         (instance @ Value::Instance(_), x) => Err(format!(
-            "`hasattr` can only index with string indexes, got: `{}` (instance: `{}`)",
-            x, instance
+            "`hasattr` can only index with string indexes, got: `{x}` (instance: `{instance}`)"
         )),
         (not_instance, _) => Err(format!(
-            "`hasattr` only works on instances, got `{}`",
-            not_instance
+            "`hasattr` only works on instances, got `{not_instance}`"
         )),
     }
 }
@@ -365,7 +339,7 @@ fn delattr_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String>
         if let Value::Instance(instance) = &mut heap.values[args[0]] {
             match instance.fields.remove(field) {
                 Some(_) => Ok(heap.builtin_constants().nil),
-                None => Err(format!("Undefined property '{}'.", field)),
+                None => Err(format!("Undefined property '{field}'.")),
             }
         } else {
             Err(format!(

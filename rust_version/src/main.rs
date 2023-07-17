@@ -1,10 +1,3 @@
-#![warn(
-    clippy::all,
-    // clippy::restriction,
-    clippy::pedantic,
-    // clippy::nursery,
-)]
-
 use std::{io::Write, path::PathBuf};
 
 use clap::Parser;
@@ -24,6 +17,7 @@ mod types;
 mod value;
 mod vm;
 
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Parser, Debug)]
 #[command(version)]
 struct Args {
@@ -78,7 +72,7 @@ fn repl() {
 fn run_file(file: PathBuf) {
     match std::fs::read(file) {
         Err(e) => {
-            eprintln!("{}", e);
+            eprintln!("{e}");
             std::process::exit(74);
         }
         Ok(contents) => {

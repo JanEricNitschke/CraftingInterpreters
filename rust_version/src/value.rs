@@ -55,8 +55,8 @@ impl From<Number> for i64 {
 impl std::fmt::Display for Number {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Number::Float(num) => f.pad(&format!("{:?}", num)),
-            Number::Integer(num) => f.pad(&format!("{}", num)),
+            Number::Float(num) => f.pad(&format!("{num:?}")),
+            Number::Integer(num) => f.pad(&format!("{num}")),
         }
     }
 }
@@ -289,8 +289,8 @@ impl From<List> for Value {
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Value::Bool(bool) => f.pad(&format!("{}", bool)),
-            Value::Number(num) => f.pad(&format!("{}", num)),
+            Value::Bool(bool) => f.pad(&format!("{bool}")),
+            Value::Number(num) => f.pad(&format!("{num}")),
             Value::Nil => f.pad("nil"),
             Value::String(s) => f.pad(s),
             Value::Function(function_id) => f.pad(&format!("<fn {}>", *function_id.name)),

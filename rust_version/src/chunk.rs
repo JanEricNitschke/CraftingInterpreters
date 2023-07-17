@@ -211,7 +211,7 @@ impl std::fmt::Debug for Chunk {
         writeln!(f, "== {} ==", *self.name)?;
         let mut disassembler = InstructionDisassembler::new(self);
         while disassembler.offset.as_ref() < &self.code.len() {
-            write!(f, "{:?}", disassembler)?;
+            write!(f, "{disassembler:?}")?;
             *disassembler.offset += disassembler.instruction_len(*disassembler.offset);
         }
         Ok(())
@@ -235,7 +235,15 @@ impl<'chunk> InstructionDisassembler<'chunk> {
 
     pub fn instruction_len(&self, offset: usize) -> usize {
         let opcode = OpCode::try_from_primitive(self.chunk.code[offset]).unwrap();
-        use OpCode::*;
+        use OpCode::{
+            Add, BitAnd, BitOr, BitXor, BuildList, Call, Class, CloseUpvalue, Closure, Constant,
+            ConstantLong, DefineGlobal, DefineGlobalConst, DefineGlobalConstLong, DefineGlobalLong,
+            Divide, Dup, DupN, Equal, Exp, False, FloorDiv, GetGlobal, GetGlobalLong, GetLocal,
+            GetLocalLong, GetProperty, GetSuper, GetUpvalue, Greater, IndexSubscript, Inherit,
+            Invoke, Jump, JumpIfFalse, JumpIfTrue, Less, Loop, Method, Mod, Multiply, Negate, Nil,
+            Not, Pop, Print, Return, SetGlobal, SetGlobalLong, SetLocal, SetLocalLong, SetProperty,
+            SetUpvalue, StoreSubscript, Subtract, SuperInvoke, True,
+        };
         std::mem::size_of::<OpCode>()
             + match opcode {
                 Negate | Add | Subtract | Multiply | Divide | Mod | Exp | FloorDiv | BitAnd
@@ -305,7 +313,7 @@ impl<'chunk> InstructionDisassembler<'chunk> {
         name: &str,
         _offset: &CodeOffset,
     ) -> std::fmt::Result {
-        writeln!(f, "{}", name)
+        writeln!(f, "{name}")
     }
 
     fn debug_byte_opcode(
@@ -315,7 +323,7 @@ impl<'chunk> InstructionDisassembler<'chunk> {
         offset: &CodeOffset,
     ) -> std::fmt::Result {
         let slot = self.chunk.code[**offset + 1];
-        writeln!(f, "{:-16} {:>4}", name, slot)
+        writeln!(f, "{name:-16} {slot:>4}")
     }
 
     fn debug_byte_long_opcode(
@@ -328,7 +336,7 @@ impl<'chunk> InstructionDisassembler<'chunk> {
         let slot = (usize::from(code[offset.as_ref() + 1]) << 16)
             + (usize::from(code[offset.as_ref() + 2]) << 8)
             + (usize::from(code[offset.as_ref() + 3]));
-        writeln!(f, "{:-16} {:>4}", name, slot)
+        writeln!(f, "{name:-16} {slot:>4}")
     }
 
     fn debug_jump_opcode(
@@ -363,7 +371,7 @@ impl<'chunk> InstructionDisassembler<'chunk> {
         offset += 1;
 
         let value = &**self.chunk.get_constant(constant);
-        writeln!(f, "{:-16} {:>4} {}", name, constant, value)?;
+        writeln!(f, "{name:-16} {constant:>4} {value}")?;
 
         let function = value.as_function();
         //eprintln!("{} {}", *function.name, function.upvalue_count);
@@ -373,8 +381,7 @@ impl<'chunk> InstructionDisassembler<'chunk> {
 
             debug_assert!(
                 is_local == 0 || is_local == 1,
-                "is_local must be 0 or 1, got: {}",
-                is_local
+                "is_local must be 0 or 1, got: {is_local}"
             );
             let is_local = is_local == 1;
 

@@ -18,8 +18,7 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
             let locals = self.locals_mut();
             while locals
                 .last()
-                .map(|local| local.depth > scope_depth)
-                .unwrap_or(false)
+                .map_or(false, |local| local.depth > scope_depth)
             {
                 instructions.push(if locals.last().unwrap().is_captured {
                     OpCode::CloseUpvalue
@@ -93,7 +92,7 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
             if !matches!(previous_kind, TK::Equal) {
                 self.emit_byte(get_op, line);
                 if !self.emit_number(arg, long) {
-                    self.error(&format!("Too many globals in {:?}", get_op));
+                    self.error(&format!("Too many globals in {get_op:?}"));
                 }
                 self.expression();
                 match previous_kind {
@@ -122,7 +121,7 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         self.emit_byte(op, line);
 
         if !self.emit_number(arg, long) {
-            self.error(&format!("Too many globals in {:?}", op));
+            self.error(&format!("Too many globals in {op:?}"));
         }
     }
 
