@@ -65,5 +65,3 @@ jobs:
     - name: Run benchmarks
       working-directory: rust_version
       run: make benchmark-ci
-
-
