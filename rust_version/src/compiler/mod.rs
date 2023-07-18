@@ -124,7 +124,7 @@ pub struct Compiler<'scanner, 'heap> {
 impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
     #[must_use]
     pub fn new(scanner: Scanner<'scanner>, heap: &'heap mut Heap) -> Self {
-        let function_name = heap.string_id(String::from("<script>"));
+        let function_name = heap.string_id(&String::from("<script>"));
 
         Compiler {
             heap,
@@ -139,7 +139,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
         }
     }
 
-    fn start_nesting<S>(&mut self, function_name: S, function_type: FunctionType)
+    fn start_nesting<S>(&mut self, function_name: &S, function_type: FunctionType)
     where
         S: ToString,
     {
@@ -152,7 +152,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
         self.nestable_state.pop().unwrap()
     }
 
-    fn nested<F, S>(&mut self, function_name: S, function_type: FunctionType, f: F) -> NestableState
+    fn nested<F, S>(&mut self, function_name: &S, function_type: FunctionType, f: F) -> NestableState
     where
         S: ToString,
         F: Fn(&mut Self),

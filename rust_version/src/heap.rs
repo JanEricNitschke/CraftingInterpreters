@@ -200,7 +200,7 @@ impl BuiltinConstants {
             nil: heap.add_value(Value::Nil),
             true_: heap.add_value(Value::Bool(true)),
             false_: heap.add_value(Value::Bool(false)),
-            init_string: heap.string_id("init".to_string()),
+            init_string: heap.string_id(&"init".to_string()),
             integers: (0..1024)
                 .map(|n| heap.add_value(Value::Number(Number::Integer(n))))
                 .collect(),
@@ -218,8 +218,10 @@ impl BuiltinConstants {
         }
     }
 
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     pub fn number(&self, n: Number) -> Option<ValueId> {
         match n {
+            // Negative integers wrap too high and get gives None as expected
             Number::Integer(i) => self.integers.get(i as usize).copied(),
             Number::Float(f) => {
                 if f.fract() != 0.0 || f.is_nan() || f.is_infinite() || f.signum() < 0.0 {
@@ -279,7 +281,7 @@ impl Heap {
         self.builtin_constants.as_ref().unwrap()
     }
 
-    pub fn string_id<S>(&mut self, s: S) -> StringId
+    pub fn string_id<S>(&mut self, s: &S) -> StringId
     where
         S: ToString,
     {
@@ -345,17 +347,18 @@ impl Heap {
     }
 
     pub fn mark_value(&mut self, id: &ValueId) {
-        self.blacken_value(id.id)
+        self.blacken_value(id.id);
     }
 
     pub fn mark_string(&mut self, id: &StringId) {
-        self.blacken_string(id.id)
+        self.blacken_string(id.id);
     }
 
     pub fn mark_function(&mut self, id: &FunctionId) {
-        self.blacken_function(id.id)
+        self.blacken_function(id.id);
     }
 
+    #[allow(clippy::too_many_lines)]
     fn blacken_value(&mut self, index: ValueKey) {
         let item = &mut self.values.data[index];
         if item.marked == self.black_value {
@@ -389,7 +392,7 @@ impl Heap {
                         native_function_id.name.id, *native_function_id.name
                     );
                 }
-                self.strings.gray.push(native_function_id.name.id)
+                self.strings.gray.push(native_function_id.name.id);
             }
             Value::NativeMethod(native_methods_id) => {
                 if self.log_gc {
@@ -431,7 +434,7 @@ impl Heap {
                 if self.log_gc {
                     eprintln!("Value/{:?} gray {}", value_id.id, **value_id);
                 }
-                self.values.gray.push(value_id.id)
+                self.values.gray.push(value_id.id);
             }
             Value::Class(c) => {
                 if self.log_gc {

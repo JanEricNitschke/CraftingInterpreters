@@ -30,29 +30,29 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         }
 
         for instruction in instructions {
-            self.emit_byte(instruction, line)
+            self.emit_byte(instruction, line);
         }
     }
 
     pub(super) fn variable(&mut self, can_assign: bool) {
         self.named_variable(
-            self.previous.as_ref().unwrap().as_str().to_string(),
+            &self.previous.as_ref().unwrap().as_str().to_string(),
             can_assign,
         );
     }
 
-    pub(super) fn named_variable<S>(&mut self, name: S, can_assign: bool)
+    pub(super) fn named_variable<S>(&mut self, name: &S, can_assign: bool)
     where
         S: ToString,
     {
         let line = self.line();
         let mut get_op = OpCode::GetLocal;
         let mut set_op = OpCode::SetLocal;
-        let mut arg = self.resolve_local(name.to_string());
+        let mut arg = self.resolve_local(name);
 
         // Upvalue?
         if arg.is_none() {
-            if let Some(upvalue_arg) = self.resolve_upvalue(name.to_string()) {
+            if let Some(upvalue_arg) = self.resolve_upvalue(name) {
                 get_op = OpCode::GetUpvalue;
                 set_op = OpCode::SetUpvalue;
                 arg = Some(usize::from(upvalue_arg));
@@ -89,7 +89,9 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
                 | self.match_(TK::PercentEqual))
         {
             let previous_kind = self.previous.as_ref().unwrap().kind;
-            if !matches!(previous_kind, TK::Equal) {
+            if matches!(previous_kind, TK::Equal) {
+                self.expression();
+            } else {
                 self.emit_byte(get_op, line);
                 if !self.emit_number(arg, long) {
                     self.error(&format!("Too many globals in {get_op:?}"));
@@ -106,8 +108,6 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
                     TK::PercentEqual => self.emit_byte(OpCode::Mod, line),
                     _ => unreachable!("Unexpected byte code "),
                 }
-            } else {
-                self.expression();
             }
             if set_op == OpCode::SetLocal || set_op == OpCode::SetLocalLong {
                 self.check_local_const(arg);
@@ -125,7 +125,7 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         }
     }
 
-    pub(super) fn identifier_constant<S>(&mut self, name: S) -> ConstantLongIndex
+    pub(super) fn identifier_constant<S>(&mut self, name: &S) -> ConstantLongIndex
     where
         S: ToString,
     {
@@ -140,7 +140,7 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         }
     }
 
-    fn resolve_local<S>(&mut self, name: S) -> Option<usize>
+    fn resolve_local<S>(&mut self, name: &S) -> Option<usize>
     where
         S: ToString,
     {
@@ -179,7 +179,7 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         });
     }
 
-    fn resolve_upvalue<S>(&mut self, name: S) -> Option<u8>
+    fn resolve_upvalue<S>(&mut self, name: &S) -> Option<u8>
     where
         S: ToString,
     {
@@ -187,15 +187,12 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
             return None;
         }
 
-        if let Some(local) = self.in_enclosing(|compiler| compiler.resolve_local(name.to_string()))
-        {
+        if let Some(local) = self.in_enclosing(|compiler| compiler.resolve_local(name)) {
             self.in_enclosing(|compiler| compiler.locals_mut()[local].is_captured = true);
             return Some(self.add_upvalue(local, true));
         }
 
-        if let Some(upvalue) =
-            self.in_enclosing(|compiler| compiler.resolve_upvalue(name.to_string()))
-        {
+        if let Some(upvalue) = self.in_enclosing(|compiler| compiler.resolve_upvalue(name)) {
             return Some(self.add_upvalue(usize::from(upvalue), false));
         }
 
@@ -260,7 +257,7 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         if *self.scope_depth() > 0 {
             None
         } else {
-            Some(self.identifier_constant(self.previous.as_ref().unwrap().as_str().to_string()))
+            Some(self.identifier_constant(&self.previous.as_ref().unwrap().as_str().to_string()))
         }
     }
 
@@ -310,9 +307,9 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
                 if arg_count == 255 {
                     self.error("Can't have more than 255 arguments.");
                     break;
-                } else {
-                    arg_count += 1;
                 }
+                arg_count += 1;
+
                 if !self.match_(TK::Comma) {
                     break;
                 }

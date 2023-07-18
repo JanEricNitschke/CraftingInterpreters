@@ -1,3 +1,5 @@
+#![allow(clippy::unnecessary_wraps)]
+
 use rand::Rng;
 use std::io;
 use std::thread;
@@ -9,7 +11,7 @@ use rustc_hash::FxHashMap as HashMap;
 use crate::{
     compiler::Compiler,
     heap::{Heap, StringId, ValueId},
-    value::{List, Number, Value},
+    value::{List, Number, Value, ias_f64, ias_u64},
     vm::VM,
 };
 
@@ -25,9 +27,9 @@ fn clock_native(heap: &mut Heap, _args: &[&ValueId]) -> Result<ValueId, String> 
 
 fn sleep_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     match &heap.values[args[0]] {
-        Value::Number(Number::Integer(n)) => thread::sleep(Duration::from_secs(*n as u64)),
+        Value::Number(Number::Integer(i)) if i >= &0 => thread::sleep(Duration::from_secs(ias_u64(*i))),
         x => {
-            return Err(format!("'sleep' expected integer argument, got: `{}`", *x));
+            return Err(format!("'sleep' expected positive integer argument, got: `{}`", *x));
         }
     };
     Ok(heap.builtin_constants().nil)
@@ -36,7 +38,7 @@ fn sleep_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
 fn sqrt_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     match &heap.values[args[0]] {
         Value::Number(Number::Float(n)) => Ok(heap.add_value(n.sqrt().into())),
-        Value::Number(Number::Integer(n)) => Ok(heap.add_value((*n as f64).sqrt().into())),
+        Value::Number(Number::Integer(n)) => Ok(heap.add_value((ias_f64(*n)).sqrt().into())),
         x => Err(format!("'sqrt' expected numeric argument, got: {}", *x)),
     }
 }
@@ -48,7 +50,7 @@ fn input_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
             let mut choice = String::new();
             match io::stdin().read_line(&mut choice) {
                 Ok(_) => {
-                    let string = Value::String(heap.string_id(choice.trim().to_string()));
+                    let string = Value::String(heap.string_id(&choice.trim()));
                     Ok(heap.add_value(string))
                 }
                 Err(e) => Err(format!("'input' could not read line: {e}")),
@@ -100,32 +102,32 @@ fn to_int_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> 
 
 fn to_string_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     let value = &heap.values[args[0]];
-    let string = Value::String(heap.string_id(value.to_string()));
+    let string = Value::String(heap.string_id(&value.to_string()));
     Ok(heap.add_value(string))
 }
 
 fn type_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     let string = match &heap.values[args[0]] {
-        Value::Bool(_) => Value::String(heap.string_id("<type bool>".to_string())),
-        Value::BoundMethod(_) => Value::String(heap.string_id("<type bound method>".to_string())),
-        Value::Class(_) => Value::String(heap.string_id("<type class>".to_string())),
-        Value::Closure(_) => Value::String(heap.string_id("<type closure>".to_string())),
-        Value::Function(_) => Value::String(heap.string_id("<type function>".to_string())),
+        Value::Bool(_) => Value::String(heap.string_id(&"<type bool>")),
+        Value::BoundMethod(_) => Value::String(heap.string_id(&"<type bound method>")),
+        Value::Class(_) => Value::String(heap.string_id(&"<type class>")),
+        Value::Closure(_) => Value::String(heap.string_id(&"<type closure>")),
+        Value::Function(_) => Value::String(heap.string_id(&"<type function>")),
         Value::Instance(instance) => Value::String(
-            heap.string_id("<type ".to_string() + instance.class.as_class().name.as_str() + ">"),
+            heap.string_id(&("<type ".to_string() + instance.class.as_class().name.as_str() + ">")),
         ),
         Value::NativeFunction(_) => {
-            Value::String(heap.string_id("<type native function>".to_string()))
+            Value::String(heap.string_id(&"<type native function>"))
         }
-        Value::NativeMethod(_) => Value::String(heap.string_id("<type native method>".to_string())),
-        Value::Nil => Value::String(heap.string_id("<type nil>".to_string())),
+        Value::NativeMethod(_) => Value::String(heap.string_id(&"<type native method>")),
+        Value::Nil => Value::String(heap.string_id(&"<type nil>")),
         Value::Number(n) => match n {
-            Number::Float(_) => Value::String(heap.string_id("<type float>".to_string())),
-            Number::Integer(_) => Value::String(heap.string_id("<type int>".to_string())),
+            Number::Float(_) => Value::String(heap.string_id(&"<type float>")),
+            Number::Integer(_) => Value::String(heap.string_id(&"<type int>")),
         },
-        Value::String(_) => Value::String(heap.string_id("<type string>".to_string())),
-        Value::Upvalue(_) => Value::String(heap.string_id("<type upvalue>".to_string())),
-        Value::List(_) => Value::String(heap.string_id("<type list>".to_string())),
+        Value::String(_) => Value::String(heap.string_id(&"<type string>")),
+        Value::Upvalue(_) => Value::String(heap.string_id(&"<type upvalue>")),
+        Value::List(_) => Value::String(heap.string_id(&"<type list>")),
     };
     Ok(heap.add_value(string))
 }
@@ -372,7 +374,7 @@ impl Natives {
             "clock", "sleep", "sqrt", "input", "float", "int", "str", "type", "getattr", "setattr",
             "hasattr", "delattr", "rng", "print", "append", "pop", "insert", "len", "List",
         ] {
-            let string_id = heap.string_id(name.to_string());
+            let string_id = heap.string_id(&name);
             self.string_ids.insert(name.to_string(), string_id);
         }
     }

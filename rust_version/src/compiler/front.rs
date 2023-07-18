@@ -66,7 +66,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
             self.declaration();
         }
 
-        self.consume(TK::RightBrace, "Expect '}' after block.")
+        self.consume(TK::RightBrace, "Expect '}' after block.");
     }
 
     fn scoped_block(&mut self) {
@@ -79,7 +79,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
         let line = self.line();
         let function_name = self.previous.as_ref().unwrap().as_str().to_string();
 
-        let nested_state = self.nested(function_name, function_type, |compiler| {
+        let nested_state = self.nested(&function_name, function_type, |compiler| {
             compiler.begin_scope();
 
             compiler.consume(TK::LeftParen, "Expect '(' after function name.");
@@ -121,7 +121,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
     fn method(&mut self) {
         self.consume(TK::Identifier, "Expect method name.");
         let name_constant =
-            self.identifier_constant(self.previous.as_ref().unwrap().as_str().to_string());
+            self.identifier_constant(&self.previous.as_ref().unwrap().as_str().to_string());
         let function_type = if self.previous.as_ref().unwrap().lexeme == "init".as_bytes() {
             FunctionType::Initializer
         } else {
@@ -139,7 +139,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
     fn class_declaration(&mut self) {
         self.consume(TK::Identifier, "Expect class name.");
         let class_name = self.previous.as_ref().unwrap().as_str().to_string();
-        let name_constant = self.identifier_constant(class_name.to_string());
+        let name_constant = self.identifier_constant(&class_name);
         self.declare_variable(true);
         self.emit_bytes(
             OpCode::Class,
@@ -167,7 +167,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
             self.current_class_mut().unwrap().has_superclass = true;
         }
 
-        self.named_variable(class_name, true);
+        self.named_variable(&class_name, true);
         self.consume(TK::LeftBrace, "Expect '{' before class body.");
         while !self.check(TK::RightBrace) && !self.check(TK::Eof) {
             self.method();
@@ -270,7 +270,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
         } else if self.match_(TK::Var) {
             self.var_declaration(true);
         } else if self.match_(TK::Const) {
-            self.var_declaration(false)
+            self.var_declaration(false);
         } else {
             self.statement();
         }
@@ -437,7 +437,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
             let loop_start = self.loop_state().as_ref().unwrap().start;
             self.emit_loop(loop_start);
             self.loop_state_mut().as_mut().unwrap().start = increment_start;
-            self.patch_jump(body_jump)
+            self.patch_jump(body_jump);
         }
 
         // Alias loop variable for this iteration of the loop

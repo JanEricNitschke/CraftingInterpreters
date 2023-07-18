@@ -12,7 +12,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
     where
         T: Into<u8>,
     {
-        self.current_chunk().write(byte, line)
+        self.current_chunk().write(byte, line);
     }
 
     pub(super) fn emit_24bit_number(&mut self, number: usize) -> bool {
@@ -59,6 +59,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
         retval
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     pub(super) fn patch_jump(&mut self, jump_offset: CodeOffset) {
         let jump_length = self.current_chunk().code().len() - *jump_offset - 3; // 3: length of the jump instruction + its arg
 
@@ -78,6 +79,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
         }
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     pub(super) fn emit_loop(&mut self, loop_start: CodeOffset) {
         let offset = self.current_chunk().code().len() - *loop_start + 3; // 3: length of the loop instruction + its arg
         let line = self.line();

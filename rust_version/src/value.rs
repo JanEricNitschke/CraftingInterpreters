@@ -34,11 +34,45 @@ pub enum Number {
     Integer(i64),
 }
 
+#[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+pub fn ias_f64(i: i64) -> f64 {
+    let result = i as f64;
+    assert!(
+        (result as i64 == i),
+        "Could not losslessly convert i64 `{i}` to f64."
+    );
+    result
+}
+
+#[allow(clippy::cast_possible_truncation)]
+pub fn ias_i32(i: i64) -> i32 {
+    assert!(
+        (i <= i64::from(i32::MAX)),
+        "Could not losslessly convert i64 `{i}` to i32."
+    );
+    i as i32
+}
+
+#[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+pub fn ias_u64(i: i64) -> u64 {
+    let result = i as u64;
+    assert!(
+        (result as i64 == i),
+        "Could not losslessly convert i64 `{i}` to u64."
+    );
+    result
+}
+
+#[allow(clippy::cast_possible_truncation)]
+pub fn fas_i64(f: f64) -> i64 {
+    f as i64
+}
+
 impl From<Number> for f64 {
     fn from(n: Number) -> Self {
         match n {
             Number::Float(n) => n,
-            Number::Integer(n) => n as f64,
+            Number::Integer(n) => ias_f64(n),
         }
     }
 }
@@ -46,8 +80,8 @@ impl From<Number> for f64 {
 impl From<Number> for i64 {
     fn from(n: Number) -> Self {
         match n {
-            Number::Float(n) => n as i64,
-            Number::Integer(n) => n,
+            Number::Float(f) => fas_i64(f),
+            Number::Integer(i) => i,
         }
     }
 }
@@ -64,18 +98,21 @@ impl std::fmt::Display for Number {
 impl Number {
     pub fn pow(self, exp: Number) -> Number {
         match (self, exp) {
-            (Number::Integer(a), Number::Integer(b)) => Number::Integer(a.pow(b as u32)),
-            (Number::Float(a), Number::Integer(b)) => Number::Float(a.powi(b as i32)),
-            (Number::Integer(a), Number::Float(b)) => Number::Float((a as f64).powf(b)),
+            (Number::Integer(a), Number::Integer(b)) if b > 0 => Number::Integer(a.pow(
+                u32::try_from(b).unwrap_or_else(|_| panic!("Could not convert i64 `{b}` to u32.")),
+            )),
+            (Number::Float(a), Number::Integer(b)) => Number::Float(a.powi(ias_i32(b))),
+            (Number::Integer(a), Number::Float(b)) => Number::Float((ias_f64(a)).powf(b)),
             (Number::Float(a), Number::Float(b)) => Number::Float(a.powf(b)),
+            (Number::Integer(a), Number::Integer(b)) => Number::Float(ias_f64(a).powi(ias_i32(b))),
         }
     }
 
     pub fn floor_div(self, exp: Number) -> Number {
         match (self, exp) {
             (Number::Integer(a), Number::Integer(b)) => Number::Integer(a / b),
-            (Number::Float(a), Number::Integer(b)) => Number::Float((a / (b as f64)).floor()),
-            (Number::Integer(a), Number::Float(b)) => Number::Float(((a as f64) / b).floor()),
+            (Number::Float(a), Number::Integer(b)) => Number::Float((a / (ias_f64(b))).floor()),
+            (Number::Integer(a), Number::Float(b)) => Number::Float(((ias_f64(a)) / b).floor()),
             (Number::Float(a), Number::Float(b)) => Number::Float((a / b).floor()),
         }
     }
@@ -85,9 +122,9 @@ impl ::core::ops::Div for Number {
     type Output = Number;
     fn div(self, rhs: Number) -> Number {
         match (self, rhs) {
-            (Number::Integer(a), Number::Integer(b)) => Number::Float(a as f64 / b as f64),
-            (Number::Float(a), Number::Integer(b)) => Number::Float(a / b as f64),
-            (Number::Integer(a), Number::Float(b)) => Number::Float(a as f64 / b),
+            (Number::Integer(a), Number::Integer(b)) => Number::Float(ias_f64(a) / ias_f64(b)),
+            (Number::Float(a), Number::Integer(b)) => Number::Float(a / ias_f64(b)),
+            (Number::Integer(a), Number::Float(b)) => Number::Float(ias_f64(a) / b),
             (Number::Float(a), Number::Float(b)) => Number::Float(a / b),
         }
     }
@@ -98,8 +135,8 @@ impl ::core::ops::Add for Number {
     fn add(self, rhs: Number) -> Number {
         match (self, rhs) {
             (Number::Integer(a), Number::Integer(b)) => Number::Integer(a + b),
-            (Number::Float(a), Number::Integer(b)) => Number::Float(a + b as f64),
-            (Number::Integer(a), Number::Float(b)) => Number::Float(a as f64 + b),
+            (Number::Float(a), Number::Integer(b)) => Number::Float(a + ias_f64(b)),
+            (Number::Integer(a), Number::Float(b)) => Number::Float(ias_f64(a) + b),
             (Number::Float(a), Number::Float(b)) => Number::Float(a + b),
         }
     }
@@ -110,8 +147,8 @@ impl ::core::ops::Sub for Number {
     fn sub(self, rhs: Number) -> Number {
         match (self, rhs) {
             (Number::Integer(a), Number::Integer(b)) => Number::Integer(a - b),
-            (Number::Float(a), Number::Integer(b)) => Number::Float(a - b as f64),
-            (Number::Integer(a), Number::Float(b)) => Number::Float(a as f64 - b),
+            (Number::Float(a), Number::Integer(b)) => Number::Float(a - ias_f64(b)),
+            (Number::Integer(a), Number::Float(b)) => Number::Float(ias_f64(a) - b),
             (Number::Float(a), Number::Float(b)) => Number::Float(a - b),
         }
     }
@@ -122,8 +159,8 @@ impl ::core::ops::Mul for Number {
     fn mul(self, rhs: Number) -> Number {
         match (self, rhs) {
             (Number::Integer(a), Number::Integer(b)) => Number::Integer(a * b),
-            (Number::Float(a), Number::Integer(b)) => Number::Float(a * b as f64),
-            (Number::Integer(a), Number::Float(b)) => Number::Float(a as f64 * b),
+            (Number::Float(a), Number::Integer(b)) => Number::Float(a * ias_f64(b)),
+            (Number::Integer(a), Number::Float(b)) => Number::Float(ias_f64(a) * b),
             (Number::Float(a), Number::Float(b)) => Number::Float(a * b),
         }
     }
@@ -164,8 +201,8 @@ impl ::core::ops::Rem for Number {
     fn rem(self, rhs: Number) -> Number {
         match (self, rhs) {
             (Number::Integer(a), Number::Integer(b)) => Number::Integer(a % b),
-            (Number::Float(a), Number::Integer(b)) => Number::Float(a % b as f64),
-            (Number::Integer(a), Number::Float(b)) => Number::Float(a as f64 % b),
+            (Number::Float(a), Number::Integer(b)) => Number::Float(a % ias_f64(b)),
+            (Number::Integer(a), Number::Float(b)) => Number::Float(ias_f64(a) % b),
             (Number::Float(a), Number::Float(b)) => Number::Float(a % b),
         }
     }
@@ -181,7 +218,7 @@ impl Upvalue {
     pub fn as_open(&self) -> usize {
         match self {
             Upvalue::Open(n) => *n,
-            _ => unreachable!(),
+            Upvalue::Closed(_) => unreachable!("Only call as_open on a known open upvalue!"),
         }
     }
 }

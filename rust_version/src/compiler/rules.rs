@@ -37,8 +37,8 @@ pub(super) struct Rule<'scanner, 'arena> {
 impl<'scanner, 'arena> Default for Rule<'scanner, 'arena> {
     fn default() -> Self {
         Self {
-            prefix: Default::default(),
-            infix: Default::default(),
+            prefix: Option::default(),
+            infix: Option::default(),
             precedence: Precedence::None,
         }
     }
@@ -174,7 +174,7 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
                     | self.match_(TK::AmperEqual)
                     | self.match_(TK::PercentEqual))
             {
-                self.error("Invalid assignment target.")
+                self.error("Invalid assignment target.");
             }
         } else {
             self.error("Expect expression.");
@@ -232,7 +232,7 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
     fn dot(&mut self, can_assign: bool) {
         self.consume(TK::Identifier, "Expect property name after '.'.");
         let name_constant =
-            self.identifier_constant(self.previous.as_ref().unwrap().as_str().to_string());
+            self.identifier_constant(&self.previous.as_ref().unwrap().as_str().to_string());
         let line = self.line();
         if can_assign
             && (self.match_(TK::Equal)
@@ -246,7 +246,9 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
                 | self.match_(TK::PercentEqual))
         {
             let previous_kind = self.previous.as_ref().unwrap().kind;
-            if !matches!(previous_kind, TK::Equal) {
+            if matches!(previous_kind, TK::Equal) {
+                self.expression();
+            } else {
                 self.emit_byte(OpCode::Dup, line);
                 self.emit_byte(OpCode::GetProperty, line);
                 if !self.emit_number(name_constant.0, false) {
@@ -264,8 +266,6 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
                     TK::PercentEqual => self.emit_byte(OpCode::Mod, line),
                     _ => unreachable!("Unexpected byte code "),
                 }
-            } else {
-                self.expression();
             }
             self.emit_byte(OpCode::SetProperty, line);
             if !self.emit_number(name_constant.0, false) {
@@ -358,7 +358,9 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
                 | self.match_(TK::PercentEqual))
         {
             let previous_kind = self.previous.as_ref().unwrap().kind;
-            if !matches!(previous_kind, TK::Equal) {
+            if matches!(previous_kind, TK::Equal) {
+                self.expression();
+            } else {
                 self.emit_bytes(OpCode::DupN, 2, line);
                 self.emit_byte(OpCode::IndexSubscript, line);
                 self.expression();
@@ -373,8 +375,6 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
                     TK::PercentEqual => self.emit_byte(OpCode::Mod, line),
                     _ => unreachable!("Unexpected byte code "),
                 }
-            } else {
-                self.expression();
             }
             self.emit_byte(OpCode::StoreSubscript, line);
         } else {
@@ -416,21 +416,21 @@ impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
         }
         self.consume(TK::Dot, "Expect '.' after 'super'.");
         self.consume(TK::Identifier, "Expect superclass method name.");
-        let name = self.identifier_constant(self.previous.as_ref().unwrap().as_str().to_string());
+        let name = self.identifier_constant(&self.previous.as_ref().unwrap().as_str().to_string());
 
         let line = self.line();
 
-        self.named_variable(self.synthetic_token(TK::This).as_str(), false);
+        self.named_variable(&self.synthetic_token(TK::This).as_str(), false);
         if self.match_(TK::LeftParen) {
             let arg_count = self.argument_list();
-            self.named_variable(self.synthetic_token(TK::Super).as_str(), false);
+            self.named_variable(&self.synthetic_token(TK::Super).as_str(), false);
             self.emit_byte(OpCode::SuperInvoke, line);
             if !self.emit_number(*name, false) {
                 self.error("Too many constants while compiling OP_SUPER_INVOKE");
             }
-            self.emit_byte(arg_count, line)
+            self.emit_byte(arg_count, line);
         } else {
-            self.named_variable(self.synthetic_token(TK::Super).as_str(), false);
+            self.named_variable(&self.synthetic_token(TK::Super).as_str(), false);
             self.emit_byte(OpCode::GetSuper, self.line());
             if !self.emit_number(*name, false) {
                 self.error("Too many constants while compiling OP_SUPER_INVOKE");

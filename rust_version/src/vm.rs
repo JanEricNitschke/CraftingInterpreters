@@ -28,7 +28,7 @@ macro_rules! runtime_error {
     ($self:ident, $($arg:expr),* $(,)?) => {
         eprintln!($($arg),*);
         for frame in $self.callstack.iter().rev() {
-            let line = frame.closure().function.chunk.get_line(&CodeOffset(frame.ip - 1));
+            let line = frame.closure().function.chunk.get_line(CodeOffset(frame.ip - 1));
             eprintln!("[line {}] in {}", *line, *frame.closure().function.name);
         }
     };
@@ -178,6 +178,8 @@ impl VM {
         result
     }
 
+
+    #[allow(clippy::too_many_lines)]
     fn run(&mut self) -> InterpretResult {
         let trace_execution = config::TRACE_EXECUTION.load();
         let stress_gc = config::STRESS_GC.load();
@@ -258,11 +260,11 @@ impl VM {
                 }
                 OpCode::Constant => {
                     let value = self.read_constant(false);
-                    self.stack_push(value)
+                    self.stack_push(value);
                 }
                 OpCode::ConstantLong => {
                     let value = self.read_constant(true);
-                    self.stack_push(value)
+                    self.stack_push(value);
                 }
                 OpCode::Negate => {
                     if let Some(value) = self.negate() {
@@ -444,19 +446,15 @@ impl VM {
                 }
                 OpCode::Inherit => {
                     let superclass_id = self.peek(1).expect("Stack underflow in OP_INHERIT");
-                    let superclass = match &self.heap.values[superclass_id] {
-                        Value::Class(superclass) => {
-                            if superclass.is_native {
-                                runtime_error!(self, "Can not inherit from native classes yet.");
-                                return InterpretResult::RuntimeError;
-                            } else {
-                                superclass
-                            }
-                        }
-                        _ => {
-                            runtime_error!(self, "Superclass must be a class.");
+                    let superclass = if let Value::Class(superclass) = &self.heap.values[superclass_id] {
+                        if superclass.is_native {
+                            runtime_error!(self, "Can not inherit from native classes yet.");
                             return InterpretResult::RuntimeError;
                         }
+                        superclass
+                    } else {
+                        runtime_error!(self, "Superclass must be a class.");
+                        return InterpretResult::RuntimeError;
                     };
                     let methods = superclass.methods.clone();
                     let mut subclass = self.stack.pop().expect("Stack underflow in OP_INHERIT");
@@ -485,7 +483,7 @@ impl VM {
 
                     let arg_count = self.read_byte();
                     for index in (0..arg_count).rev() {
-                        list.items.push(*self.peek(index as usize).unwrap())
+                        list.items.push(*self.peek(index as usize).unwrap());
                     }
                     for _ in 0..arg_count {
                         self.stack.pop();
@@ -600,7 +598,7 @@ impl VM {
                 (Value::String(a), Value::String(b)) => {
                     // This could be optimized by allowing mutations via the heap
                     let new_string = format!("{}{}", self.heap.strings[a], self.heap.strings[b]);
-                    let new_string_id = self.heap.string_id(new_string);
+                    let new_string_id = self.heap.string_id(&new_string);
                     self.stack.pop();
                     self.stack.pop();
                     self.stack_push_value(new_string_id.into());
@@ -703,9 +701,10 @@ impl VM {
             .pop()
             .expect("Stack underflow in OP_INDEX_SUBSCRIPT")]
         {
-            Value::Number(Number::Integer(n)) => match usize::try_from(*n) {
-                Ok(value) => value,
-                Err(_) => {
+            Value::Number(Number::Integer(n)) => {
+                if let Ok(value) = usize::try_from(*n) {
+                    value
+                } else {
                     runtime_error!(
                         self,
                         "Can not index into list with negative or too large numbers, got `{}`.",
@@ -713,7 +712,8 @@ impl VM {
                     );
                     return Some(InterpretResult::RuntimeError);
                 }
-            },
+            }
+
             x => {
                 runtime_error!(self, "Can only index into list with integer, got `{}`.", x);
                 return Some(InterpretResult::RuntimeError);

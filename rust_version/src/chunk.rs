@@ -136,9 +136,9 @@ impl Chunk {
     pub fn new(name: StringId) -> Self {
         Chunk {
             name,
-            code: Default::default(),
-            lines: Default::default(),
-            constants: Default::default(),
+            code: Vec::default(),
+            lines: Vec::default(),
+            constants: Vec::default(),
         }
     }
 
@@ -233,17 +233,10 @@ impl<'chunk> InstructionDisassembler<'chunk> {
         }
     }
 
+    #[allow(clippy::enum_glob_use)]
     pub fn instruction_len(&self, offset: usize) -> usize {
+        use OpCode::*;
         let opcode = OpCode::try_from_primitive(self.chunk.code[offset]).unwrap();
-        use OpCode::{
-            Add, BitAnd, BitOr, BitXor, BuildList, Call, Class, CloseUpvalue, Closure, Constant,
-            ConstantLong, DefineGlobal, DefineGlobalConst, DefineGlobalConstLong, DefineGlobalLong,
-            Divide, Dup, DupN, Equal, Exp, False, FloorDiv, GetGlobal, GetGlobalLong, GetLocal,
-            GetLocalLong, GetProperty, GetSuper, GetUpvalue, Greater, IndexSubscript, Inherit,
-            Invoke, Jump, JumpIfFalse, JumpIfTrue, Less, Loop, Method, Mod, Multiply, Negate, Nil,
-            Not, Pop, Print, Return, SetGlobal, SetGlobalLong, SetLocal, SetLocalLong, SetProperty,
-            SetUpvalue, StoreSubscript, Subtract, SuperInvoke, True,
-        };
         std::mem::size_of::<OpCode>()
             + match opcode {
                 Negate | Add | Subtract | Multiply | Divide | Mod | Exp | FloorDiv | BitAnd
@@ -275,7 +268,7 @@ impl<'chunk> InstructionDisassembler<'chunk> {
         &self,
         f: &mut std::fmt::Formatter,
         name: &str,
-        offset: &CodeOffset,
+        offset: CodeOffset,
     ) -> std::fmt::Result {
         let constant_index = ConstantIndex(self.chunk.code()[offset.as_ref() + 1]);
         write!(f, "{:-16} {:>4}", name, *constant_index,)?;
@@ -290,7 +283,7 @@ impl<'chunk> InstructionDisassembler<'chunk> {
         &self,
         f: &mut std::fmt::Formatter,
         name: &str,
-        offset: &CodeOffset,
+        offset: CodeOffset,
     ) -> std::fmt::Result {
         let code = self.chunk.code();
         let constant_index = ConstantLongIndex(
@@ -307,11 +300,12 @@ impl<'chunk> InstructionDisassembler<'chunk> {
         )
     }
 
+    #[allow(clippy::unused_self)]
     fn debug_simple_opcode(
         &self,
         f: &mut std::fmt::Formatter,
         name: &str,
-        _offset: &CodeOffset,
+        _offset: CodeOffset,
     ) -> std::fmt::Result {
         writeln!(f, "{name}")
     }
@@ -320,9 +314,9 @@ impl<'chunk> InstructionDisassembler<'chunk> {
         &self,
         f: &mut std::fmt::Formatter,
         name: &str,
-        offset: &CodeOffset,
+        offset: CodeOffset,
     ) -> std::fmt::Result {
-        let slot = self.chunk.code[**offset + 1];
+        let slot = self.chunk.code[*offset + 1];
         writeln!(f, "{name:-16} {slot:>4}")
     }
 
@@ -330,7 +324,7 @@ impl<'chunk> InstructionDisassembler<'chunk> {
         &self,
         f: &mut std::fmt::Formatter,
         name: &str,
-        offset: &CodeOffset,
+        offset: CodeOffset,
     ) -> std::fmt::Result {
         let code = self.chunk.code();
         let slot = (usize::from(code[offset.as_ref() + 1]) << 16)
@@ -343,27 +337,27 @@ impl<'chunk> InstructionDisassembler<'chunk> {
         &self,
         f: &mut std::fmt::Formatter,
         name: &str,
-        offset: &CodeOffset,
+        offset: CodeOffset,
     ) -> std::fmt::Result {
         let code = self.chunk.code();
         let jump = (usize::from(code[offset.as_ref() + 1]) << 8)
             + (usize::from(code[offset.as_ref() + 2]));
-        let target = **offset + self.instruction_len(**offset);
-        let target = if OpCode::try_from_primitive(code[**offset]).unwrap() == OpCode::Loop {
+        let target = *offset + self.instruction_len(*offset);
+        let target = if OpCode::try_from_primitive(code[*offset]).unwrap() == OpCode::Loop {
             target - jump
         } else {
             target + jump
         };
-        writeln!(f, "{:-16} {:>4} -> {}", name, **offset, target)
+        writeln!(f, "{:-16} {:>4} -> {}", name, *offset, target)
     }
 
     fn debug_closure_opcode(
         &self,
         f: &mut std::fmt::Formatter,
         name: &str,
-        offset: &CodeOffset,
+        offset: CodeOffset,
     ) -> std::fmt::Result {
-        let mut offset = **offset + 1;
+        let mut offset = *offset + 1;
 
         let code = self.chunk.code();
         //eprintln!("{:?}", &code[offset..]);
@@ -403,7 +397,7 @@ impl<'chunk> InstructionDisassembler<'chunk> {
         &self,
         f: &mut std::fmt::Formatter,
         name: &str,
-        offset: &CodeOffset,
+        offset: CodeOffset,
     ) -> std::fmt::Result {
         let code = self.chunk.code();
         let constant = code[offset.as_ref() + 1];
@@ -439,11 +433,11 @@ macro_rules! disassemble {
 impl<'chunk> std::fmt::Debug for InstructionDisassembler<'chunk> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let code = self.chunk.code();
-        let offset = &self.offset;
+        let offset = self.offset;
 
         write!(f, "{:04} ", *offset.as_ref())?;
         if *offset.as_ref() > 0
-            && self.chunk.get_line(offset) == self.chunk.get_line(&CodeOffset(offset.as_ref() - 1))
+            && self.chunk.get_line(offset) == self.chunk.get_line(CodeOffset(offset.as_ref() - 1))
         {
             write!(f, "   | ")?;
         } else {
@@ -515,7 +509,7 @@ impl<'chunk> std::fmt::Debug for InstructionDisassembler<'chunk> {
 }
 
 impl Chunk {
-    pub fn get_line(&self, offset: &CodeOffset) -> Line {
+    pub fn get_line(&self, offset: CodeOffset) -> Line {
         let mut iter = self.lines.iter();
         let (mut consumed, mut line) = iter.next().unwrap();
         while consumed <= *offset.as_ref() {

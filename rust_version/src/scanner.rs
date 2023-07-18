@@ -125,6 +125,7 @@ impl<'a> Scanner<'a> {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn scan(&mut self) -> Token<'a> {
         use TokenKind as TK;
         self.skip_whitespace();
@@ -311,6 +312,7 @@ impl<'a> Scanner<'a> {
         self.make_token(TokenKind::Number)
     }
 
+    #[allow(clippy::trivially_copy_pass_by_ref)]
     fn is_identifier_char(c: &u8) -> bool {
         c.is_ascii_alphanumeric() || c == &b'_'
     }
