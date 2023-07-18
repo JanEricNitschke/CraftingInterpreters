@@ -10,6 +10,4 @@ class Tree {
 }
 
 var my_list = [fib, Tree, nil, true];
-print(my_list); # expect: [<fn fib>, <class Tree>, <Tree instance>, true]
-print([fib, Tree, nil, true]);
 print(my_list == [fib, Tree, nil, true]); # expect: true

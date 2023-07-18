@@ -87,7 +87,6 @@ pub enum OpCode {
     Exp,
     FloorDiv,
 
-    Print,
     Pop,
     Dup,
     DupN,
@@ -109,7 +108,7 @@ pub enum OpCode {
 }
 
 impl OpCode {
-    pub fn to_long(self) -> Self {
+    pub const fn to_long(self) -> Self {
         match self {
             Self::GetLocal => Self::GetLocalLong,
             Self::GetGlobal => Self::GetGlobalLong,
@@ -226,7 +225,7 @@ pub struct InstructionDisassembler<'chunk> {
 
 impl<'chunk> InstructionDisassembler<'chunk> {
     #[must_use]
-    pub fn new(chunk: &'chunk Chunk) -> Self {
+    pub const fn new(chunk: &'chunk Chunk) -> Self {
         Self {
             chunk,
             offset: CodeOffset(0),
@@ -240,8 +239,8 @@ impl<'chunk> InstructionDisassembler<'chunk> {
         std::mem::size_of::<OpCode>()
             + match opcode {
                 Negate | Add | Subtract | Multiply | Divide | Mod | Exp | FloorDiv | BitAnd
-                | BitOr | BitXor | Nil | True | False | Not | Equal | Greater | Less | Print
-                | Pop | Dup | CloseUpvalue | Inherit | IndexSubscript | StoreSubscript => 0,
+                | BitOr | BitXor | Nil | True | False | Not | Equal | Greater | Less | Pop
+                | Dup | CloseUpvalue | Inherit | IndexSubscript | StoreSubscript => 0,
                 Constant | GetLocal | SetLocal | GetGlobal | SetGlobal | DefineGlobal
                 | DefineGlobalConst | Call | Return | GetUpvalue | SetUpvalue | Class
                 | GetProperty | SetProperty | Method | GetSuper | BuildList | DupN => 1,
@@ -496,7 +495,6 @@ impl<'chunk> std::fmt::Debug for InstructionDisassembler<'chunk> {
                 Nil,
                 Not,
                 Pop,
-                Print,
                 Return,
                 Subtract,
                 True,

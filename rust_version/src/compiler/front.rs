@@ -31,10 +31,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
     }
 
     pub(super) fn line(&self) -> Line {
-        match self.previous.as_ref() {
-            Some(x) => x.line,
-            None => Line(0),
-        }
+        self.previous.as_ref().map_or(Line(0), |x| x.line)
     }
 
     pub(super) fn match_(&mut self, kind: TK) -> bool {
@@ -391,12 +388,13 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
             let is_mutable = self.check_previous(TK::Var);
             self.var_declaration(is_mutable);
             // Challenge 25/2: alias loop variables
-            if let Ok(loop_var) = u8::try_from(self.locals().len() - 1) {
-                Some((loop_var, name, is_mutable))
-            } else {
-                self.error("Creating loop variable led to too many locals.");
-                None
-            }
+            u8::try_from(self.locals().len() - 1).map_or_else(
+                |_| {
+                    self.error("Creating loop variable led to too many locals.");
+                    None
+                },
+                |loop_var| Some((loop_var, name, is_mutable)),
+            )
         } else {
             self.expression_statement();
             None
@@ -447,12 +445,13 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
                 self.emit_bytes(OpCode::GetLocal, loop_var, line);
                 self.add_local(loop_var_name, is_mutable);
                 self.mark_initialized();
-                if let Ok(inner_var) = u8::try_from(self.locals().len() - 1) {
-                    Some((loop_var, inner_var))
-                } else {
-                    self.error("Aliasing loop variable led to too many locals.");
-                    None
-                }
+                u8::try_from(self.locals().len() - 1).map_or_else(
+                    |_| {
+                        self.error("Aliasing loop variable led to too many locals.");
+                        None
+                    },
+                    |inner_var| Some((loop_var, inner_var)),
+                )
             } else {
                 None
             };

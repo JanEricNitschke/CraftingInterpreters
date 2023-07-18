@@ -1,5 +1,5 @@
 #[allow(clippy::cast_possible_truncation)]
-pub fn get_4_bytes(v: usize) -> (u8, u8, u8, u8) {
+pub const fn get_4_bytes(v: usize) -> (u8, u8, u8, u8) {
     (
         ((v & 0xff00_0000) >> 24) as u8,
         ((v & 0x00ff_0000) >> 16) as u8,

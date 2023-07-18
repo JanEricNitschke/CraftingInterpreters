@@ -47,11 +47,7 @@ fn main() {
     config::STRESS_GC.store(args.stress_gc);
     config::LOG_GC.store(args.log_gc);
 
-    if let Some(path) = args.file {
-        run_file(path);
-    } else {
-        repl();
-    }
+    args.file.map_or_else(repl, run_file);
 }
 
 fn repl() {

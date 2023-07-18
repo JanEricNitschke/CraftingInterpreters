@@ -178,8 +178,7 @@ impl VM {
         result
     }
 
-
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn run(&mut self) -> InterpretResult {
         let trace_execution = config::TRACE_EXECUTION.load();
         let stress_gc = config::STRESS_GC.load();
@@ -200,12 +199,6 @@ impl VM {
             }
             self.collect_garbage(stress_gc);
             match OpCode::try_from(self.read_byte()).expect("Internal error: unrecognized opcode") {
-                OpCode::Print => {
-                    println!(
-                        "{}",
-                        *self.stack.pop().expect("Stack underflow in OP_PRINT.")
-                    );
-                }
                 OpCode::Pop => {
                     self.stack.pop().expect("Stack underflow in OP_POP.");
                 }
@@ -446,16 +439,17 @@ impl VM {
                 }
                 OpCode::Inherit => {
                     let superclass_id = self.peek(1).expect("Stack underflow in OP_INHERIT");
-                    let superclass = if let Value::Class(superclass) = &self.heap.values[superclass_id] {
-                        if superclass.is_native {
-                            runtime_error!(self, "Can not inherit from native classes yet.");
+                    let superclass =
+                        if let Value::Class(superclass) = &self.heap.values[superclass_id] {
+                            if superclass.is_native {
+                                runtime_error!(self, "Can not inherit from native classes yet.");
+                                return InterpretResult::RuntimeError;
+                            }
+                            superclass
+                        } else {
+                            runtime_error!(self, "Superclass must be a class.");
                             return InterpretResult::RuntimeError;
-                        }
-                        superclass
-                    } else {
-                        runtime_error!(self, "Superclass must be a class.");
-                        return InterpretResult::RuntimeError;
-                    };
+                        };
                     let methods = superclass.methods.clone();
                     let mut subclass = self.stack.pop().expect("Stack underflow in OP_INHERIT");
                     subclass.as_class_mut().methods.extend(methods);
@@ -559,27 +553,16 @@ impl VM {
         };
 
         if !ok {
-            if int_only {
-                runtime_error!(
-                    self,
-                    "Operands must be integers. Got: [{}]",
-                    self.stack[slice_start..]
-                        .iter()
-                        .map(|v| format!("{}", self.heap.values[v]))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                );
-            } else {
-                runtime_error!(
-                    self,
-                    "Operands must be numbers. Got: [{}]",
-                    self.stack[slice_start..]
-                        .iter()
-                        .map(|v| format!("{}", self.heap.values[v]))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                );
-            }
+            runtime_error!(
+                self,
+                "Operands must be {}. Got: [{}]",
+                if int_only { "integers" } else { "numbers" },
+                self.stack[slice_start..]
+                    .iter()
+                    .map(|v| format!("{}", self.heap.values[v]))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
         }
         ok
     }
@@ -1120,6 +1103,7 @@ impl VM {
         }
     }
 
+    #[allow(clippy::branches_sharing_code)]
     fn execute_native_method_call(
         &mut self,
         f: &NativeMethod,
@@ -1154,7 +1138,6 @@ impl VM {
                     arg_count
                 );
             };
-
             return false;
         }
         let fun = f.fun;
@@ -1174,6 +1157,7 @@ impl VM {
         }
     }
 
+    #[allow(clippy::branches_sharing_code)]
     fn execute_native_function_call(&mut self, f: &NativeFunction, arg_count: u8) -> bool {
         let arity = f.arity;
         if !arity.contains(&arg_count) {
@@ -1201,7 +1185,6 @@ impl VM {
                     arg_count
                 );
             };
-
             return false;
         }
         let fun = f.fun;

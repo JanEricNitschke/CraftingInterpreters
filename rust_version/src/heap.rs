@@ -58,7 +58,7 @@ struct Item<T> {
 }
 
 impl<T> Item<T> {
-    fn new(item: T, marked: bool) -> Self {
+    const fn new(item: T, marked: bool) -> Self {
         Self { marked, item }
     }
 }
@@ -148,7 +148,7 @@ impl<K: Key, V: ArenaValue> Arena<K, V> {
         self.bytes_allocated = std::mem::size_of::<V>() * self.data.len();
     }
 
-    fn bytes_allocated(&self) -> usize {
+    const fn bytes_allocated(&self) -> usize {
         self.bytes_allocated
     }
 }
@@ -210,7 +210,7 @@ impl BuiltinConstants {
         }
     }
 
-    pub fn bool(&self, val: bool) -> ValueId {
+    pub const fn bool(&self, val: bool) -> ValueId {
         if val {
             self.true_
         } else {
@@ -293,13 +293,13 @@ impl Heap {
         string_id
     }
 
-    fn bytes_allocated(&self) -> usize {
+    const fn bytes_allocated(&self) -> usize {
         self.values.bytes_allocated()
             + self.strings.bytes_allocated()
             + self.functions.bytes_allocated()
     }
 
-    pub fn needs_gc(&self) -> bool {
+    pub const fn needs_gc(&self) -> bool {
         self.bytes_allocated() > self.next_gc
     }
 

@@ -141,7 +141,7 @@ pub(super) fn make_rules<'scanner, 'arena>() -> Rules<'scanner, 'arena> {
 }
 
 impl<'scanner, 'arena> Compiler<'scanner, 'arena> {
-    fn get_rule(&self, operator: TK) -> &Rule<'scanner, 'arena> {
+    const fn get_rule(&self, operator: TK) -> &Rule<'scanner, 'arena> {
         &self.rules[operator as usize]
     }
 

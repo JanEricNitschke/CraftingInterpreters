@@ -68,7 +68,7 @@ struct ClassState {
 
 impl ClassState {
     #[must_use]
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             has_superclass: false,
         }
@@ -152,7 +152,12 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
         self.nestable_state.pop().unwrap()
     }
 
-    fn nested<F, S>(&mut self, function_name: &S, function_type: FunctionType, f: F) -> NestableState
+    fn nested<F, S>(
+        &mut self,
+        function_name: &S,
+        function_type: FunctionType,
+        f: F,
+    ) -> NestableState
     where
         S: ToString,
         F: Fn(&mut Self),

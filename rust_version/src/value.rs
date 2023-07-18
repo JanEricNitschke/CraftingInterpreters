@@ -64,7 +64,7 @@ pub fn ias_u64(i: i64) -> u64 {
 }
 
 #[allow(clippy::cast_possible_truncation)]
-pub fn fas_i64(f: f64) -> i64 {
+pub const fn fas_i64(f: f64) -> i64 {
     f as i64
 }
 
@@ -258,7 +258,7 @@ impl Value {
         })
     }
 
-    pub fn bound_method(receiver: ValueId, method: ValueId) -> Self {
+    pub const fn bound_method(receiver: ValueId, method: ValueId) -> Self {
         Self::BoundMethod(BoundMethod { receiver, method })
     }
 }
@@ -369,7 +369,7 @@ impl std::fmt::Display for Value {
 }
 
 impl Value {
-    pub fn is_falsey(&self) -> bool {
+    pub const fn is_falsey(&self) -> bool {
         matches!(self, Self::Bool(false) | Self::Nil)
     }
 
@@ -508,7 +508,7 @@ pub struct NativeMethod {
 pub type NativeFunctionImpl = fn(&mut Heap, &[&ValueId]) -> Result<ValueId, String>;
 pub type NativeMethodImpl = fn(&mut Heap, &ValueId, &[&ValueId]) -> Result<ValueId, String>;
 
-fn always_equals<T>(_: &T, _: &T) -> bool {
+const fn always_equals<T>(_: &T, _: &T) -> bool {
     true
 }
 
@@ -596,7 +596,7 @@ pub struct List {
 
 impl List {
     #[must_use]
-    pub fn new(array_class: ValueId) -> Self {
+    pub const fn new(array_class: ValueId) -> Self {
         Self {
             items: Vec::new(),
             class: array_class,

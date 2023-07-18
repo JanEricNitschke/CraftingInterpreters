@@ -11,7 +11,7 @@ use rustc_hash::FxHashMap as HashMap;
 use crate::{
     compiler::Compiler,
     heap::{Heap, StringId, ValueId},
-    value::{List, Number, Value, ias_f64, ias_u64},
+    value::{ias_f64, ias_u64, List, Number, Value},
     vm::VM,
 };
 
@@ -27,9 +27,14 @@ fn clock_native(heap: &mut Heap, _args: &[&ValueId]) -> Result<ValueId, String> 
 
 fn sleep_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     match &heap.values[args[0]] {
-        Value::Number(Number::Integer(i)) if i >= &0 => thread::sleep(Duration::from_secs(ias_u64(*i))),
+        Value::Number(Number::Integer(i)) if i >= &0 => {
+            thread::sleep(Duration::from_secs(ias_u64(*i)));
+        }
         x => {
-            return Err(format!("'sleep' expected positive integer argument, got: `{}`", *x));
+            return Err(format!(
+                "'sleep' expected positive integer argument, got: `{}`",
+                *x
+            ));
         }
     };
     Ok(heap.builtin_constants().nil)
@@ -60,6 +65,7 @@ fn input_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     }
 }
 
+#[allow(clippy::option_if_let_else)]
 fn to_float_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     match &heap.values[args[0]] {
         Value::String(string_id) => {
@@ -80,6 +86,7 @@ fn to_float_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String
     }
 }
 
+#[allow(clippy::option_if_let_else)]
 fn to_int_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
     match &heap.values[args[0]] {
         Value::String(string_id) => {
@@ -116,9 +123,7 @@ fn type_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String> {
         Value::Instance(instance) => Value::String(
             heap.string_id(&("<type ".to_string() + instance.class.as_class().name.as_str() + ">")),
         ),
-        Value::NativeFunction(_) => {
-            Value::String(heap.string_id(&"<type native function>"))
-        }
+        Value::NativeFunction(_) => Value::String(heap.string_id(&"<type native function>")),
         Value::NativeMethod(_) => Value::String(heap.string_id(&"<type native method>")),
         Value::Nil => Value::String(heap.string_id(&"<type nil>")),
         Value::Number(n) => match n {
@@ -227,13 +232,10 @@ fn pop_native(heap: &mut Heap, receiver: &ValueId, args: &[&ValueId]) -> Result<
                 Ok(my_list.items.remove(index))
             }
         }
-        None => {
-            if let Some(last_element) = my_list.items.pop() {
-                Ok(last_element)
-            } else {
-                Err("Can't 'pop' from an empty list.".to_string())
-            }
-        }
+        None => my_list.items.pop().map_or_else(
+            || Err("Can't 'pop' from an empty list.".to_string()),
+            Ok,
+        ),
     }
 }
 
@@ -287,10 +289,10 @@ fn getattr_native(heap: &mut Heap, args: &[&ValueId]) -> Result<ValueId, String>
     match (&heap.values[args[0]], &heap.values[args[1]]) {
         (Value::Instance(instance), Value::String(string_id)) => {
             let field = &heap.strings[string_id];
-            match instance.fields.get(field) {
-                Some(value_id) => Ok(*value_id),
-                None => Err(format!("Undefined property '{}'.", *field)),
-            }
+            instance.fields.get(field).map_or_else(
+                || Err(format!("Undefined property '{}'.", *field)),
+                |value_id| Ok(*value_id),
+            )
         }
         (instance @ Value::Instance(_), x) => Err(format!(
             "`getattr` can only index with string indexes, got: `{x}` (instance: `{instance}`)"

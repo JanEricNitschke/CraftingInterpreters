@@ -116,7 +116,7 @@ pub struct Scanner<'a> {
 
 impl<'a> Scanner<'a> {
     #[must_use]
-    pub fn new(source: &'a [u8]) -> Self {
+    pub const fn new(source: &'a [u8]) -> Self {
         Self {
             source,
             start: 0,
@@ -415,7 +415,7 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn error_token(&self, msg: &'static str) -> Token<'a> {
+    const fn error_token(&self, msg: &'static str) -> Token<'a> {
         Token {
             kind: TokenKind::Error,
             lexeme: msg.as_bytes(),
