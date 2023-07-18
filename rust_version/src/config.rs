@@ -10,8 +10,8 @@ pub struct GlobalFlag {
 
 impl GlobalFlag {
     #[must_use]
-    pub const fn new() -> GlobalFlag {
-        GlobalFlag {
+    pub const fn new() -> Self {
+        Self {
             value: AtomicBool::new(false),
         }
     }

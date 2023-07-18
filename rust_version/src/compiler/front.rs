@@ -122,7 +122,7 @@ impl<'scanner, 'heap> Compiler<'scanner, 'heap> {
         self.consume(TK::Identifier, "Expect method name.");
         let name_constant =
             self.identifier_constant(&self.previous.as_ref().unwrap().as_str().to_string());
-        let function_type = if self.previous.as_ref().unwrap().lexeme == "init".as_bytes() {
+        let function_type = if self.previous.as_ref().unwrap().lexeme == b"init" {
             FunctionType::Initializer
         } else {
             FunctionType::Method

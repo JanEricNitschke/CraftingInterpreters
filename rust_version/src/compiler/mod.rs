@@ -87,7 +87,7 @@ impl<'scanner> NestableState<'scanner> {
                     lexeme: if function_type == FunctionType::Method
                         || function_type == FunctionType::Initializer
                     {
-                        "this".as_bytes()
+                        b"this"
                     } else {
                         &[]
                     },

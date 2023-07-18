@@ -29,7 +29,7 @@ impl TryFrom<ConstantLongIndex> for ConstantIndex {
 
     fn try_from(value: ConstantLongIndex) -> Result<Self, Self::Error> {
         let short = u8::try_from(value.0)?;
-        Ok(ConstantIndex(short))
+        Ok(Self(short))
     }
 }
 
@@ -109,14 +109,14 @@ pub enum OpCode {
 }
 
 impl OpCode {
-    pub fn to_long(self) -> OpCode {
+    pub fn to_long(self) -> Self {
         match self {
-            OpCode::GetLocal => OpCode::GetLocalLong,
-            OpCode::GetGlobal => OpCode::GetGlobalLong,
-            OpCode::SetLocal => OpCode::SetLocalLong,
-            OpCode::SetGlobal => OpCode::SetGlobalLong,
-            OpCode::DefineGlobal => OpCode::DefineGlobalLong,
-            OpCode::DefineGlobalConst => OpCode::DefineGlobalConstLong,
+            Self::GetLocal => Self::GetLocalLong,
+            Self::GetGlobal => Self::GetGlobalLong,
+            Self::SetLocal => Self::SetLocalLong,
+            Self::SetGlobal => Self::SetGlobalLong,
+            Self::DefineGlobal => Self::DefineGlobalLong,
+            Self::DefineGlobalConst => Self::DefineGlobalConstLong,
             x => x,
         }
     }
@@ -134,7 +134,7 @@ pub struct Chunk {
 
 impl Chunk {
     pub fn new(name: StringId) -> Self {
-        Chunk {
+        Self {
             name,
             code: Vec::default(),
             lines: Vec::default(),

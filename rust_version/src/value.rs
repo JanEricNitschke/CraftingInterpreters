@@ -89,121 +89,121 @@ impl From<Number> for i64 {
 impl std::fmt::Display for Number {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Number::Float(num) => f.pad(&format!("{num:?}")),
-            Number::Integer(num) => f.pad(&format!("{num}")),
+            Self::Float(num) => f.pad(&format!("{num:?}")),
+            Self::Integer(num) => f.pad(&format!("{num}")),
         }
     }
 }
 
 impl Number {
-    pub fn pow(self, exp: Number) -> Number {
+    pub fn pow(self, exp: Self) -> Self {
         match (self, exp) {
-            (Number::Integer(a), Number::Integer(b)) if b > 0 => Number::Integer(a.pow(
+            (Self::Integer(a), Self::Integer(b)) if b > 0 => Self::Integer(a.pow(
                 u32::try_from(b).unwrap_or_else(|_| panic!("Could not convert i64 `{b}` to u32.")),
             )),
-            (Number::Float(a), Number::Integer(b)) => Number::Float(a.powi(ias_i32(b))),
-            (Number::Integer(a), Number::Float(b)) => Number::Float((ias_f64(a)).powf(b)),
-            (Number::Float(a), Number::Float(b)) => Number::Float(a.powf(b)),
-            (Number::Integer(a), Number::Integer(b)) => Number::Float(ias_f64(a).powi(ias_i32(b))),
+            (Self::Float(a), Self::Integer(b)) => Self::Float(a.powi(ias_i32(b))),
+            (Self::Integer(a), Self::Float(b)) => Self::Float((ias_f64(a)).powf(b)),
+            (Self::Float(a), Self::Float(b)) => Self::Float(a.powf(b)),
+            (Self::Integer(a), Self::Integer(b)) => Self::Float(ias_f64(a).powi(ias_i32(b))),
         }
     }
 
-    pub fn floor_div(self, exp: Number) -> Number {
+    pub fn floor_div(self, exp: Self) -> Self {
         match (self, exp) {
-            (Number::Integer(a), Number::Integer(b)) => Number::Integer(a / b),
-            (Number::Float(a), Number::Integer(b)) => Number::Float((a / (ias_f64(b))).floor()),
-            (Number::Integer(a), Number::Float(b)) => Number::Float(((ias_f64(a)) / b).floor()),
-            (Number::Float(a), Number::Float(b)) => Number::Float((a / b).floor()),
+            (Self::Integer(a), Self::Integer(b)) => Self::Integer(a / b),
+            (Self::Float(a), Self::Integer(b)) => Self::Float((a / (ias_f64(b))).floor()),
+            (Self::Integer(a), Self::Float(b)) => Self::Float(((ias_f64(a)) / b).floor()),
+            (Self::Float(a), Self::Float(b)) => Self::Float((a / b).floor()),
         }
     }
 }
 
 impl ::core::ops::Div for Number {
-    type Output = Number;
-    fn div(self, rhs: Number) -> Number {
+    type Output = Self;
+    fn div(self, rhs: Self) -> Self {
         match (self, rhs) {
-            (Number::Integer(a), Number::Integer(b)) => Number::Float(ias_f64(a) / ias_f64(b)),
-            (Number::Float(a), Number::Integer(b)) => Number::Float(a / ias_f64(b)),
-            (Number::Integer(a), Number::Float(b)) => Number::Float(ias_f64(a) / b),
-            (Number::Float(a), Number::Float(b)) => Number::Float(a / b),
+            (Self::Integer(a), Self::Integer(b)) => Self::Float(ias_f64(a) / ias_f64(b)),
+            (Self::Float(a), Self::Integer(b)) => Self::Float(a / ias_f64(b)),
+            (Self::Integer(a), Self::Float(b)) => Self::Float(ias_f64(a) / b),
+            (Self::Float(a), Self::Float(b)) => Self::Float(a / b),
         }
     }
 }
 
 impl ::core::ops::Add for Number {
-    type Output = Number;
-    fn add(self, rhs: Number) -> Number {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self {
         match (self, rhs) {
-            (Number::Integer(a), Number::Integer(b)) => Number::Integer(a + b),
-            (Number::Float(a), Number::Integer(b)) => Number::Float(a + ias_f64(b)),
-            (Number::Integer(a), Number::Float(b)) => Number::Float(ias_f64(a) + b),
-            (Number::Float(a), Number::Float(b)) => Number::Float(a + b),
+            (Self::Integer(a), Self::Integer(b)) => Self::Integer(a + b),
+            (Self::Float(a), Self::Integer(b)) => Self::Float(a + ias_f64(b)),
+            (Self::Integer(a), Self::Float(b)) => Self::Float(ias_f64(a) + b),
+            (Self::Float(a), Self::Float(b)) => Self::Float(a + b),
         }
     }
 }
 
 impl ::core::ops::Sub for Number {
-    type Output = Number;
-    fn sub(self, rhs: Number) -> Number {
+    type Output = Self;
+    fn sub(self, rhs: Self) -> Self {
         match (self, rhs) {
-            (Number::Integer(a), Number::Integer(b)) => Number::Integer(a - b),
-            (Number::Float(a), Number::Integer(b)) => Number::Float(a - ias_f64(b)),
-            (Number::Integer(a), Number::Float(b)) => Number::Float(ias_f64(a) - b),
-            (Number::Float(a), Number::Float(b)) => Number::Float(a - b),
+            (Self::Integer(a), Self::Integer(b)) => Self::Integer(a - b),
+            (Self::Float(a), Self::Integer(b)) => Self::Float(a - ias_f64(b)),
+            (Self::Integer(a), Self::Float(b)) => Self::Float(ias_f64(a) - b),
+            (Self::Float(a), Self::Float(b)) => Self::Float(a - b),
         }
     }
 }
 
 impl ::core::ops::Mul for Number {
-    type Output = Number;
-    fn mul(self, rhs: Number) -> Number {
+    type Output = Self;
+    fn mul(self, rhs: Self) -> Self {
         match (self, rhs) {
-            (Number::Integer(a), Number::Integer(b)) => Number::Integer(a * b),
-            (Number::Float(a), Number::Integer(b)) => Number::Float(a * ias_f64(b)),
-            (Number::Integer(a), Number::Float(b)) => Number::Float(ias_f64(a) * b),
-            (Number::Float(a), Number::Float(b)) => Number::Float(a * b),
+            (Self::Integer(a), Self::Integer(b)) => Self::Integer(a * b),
+            (Self::Float(a), Self::Integer(b)) => Self::Float(a * ias_f64(b)),
+            (Self::Integer(a), Self::Float(b)) => Self::Float(ias_f64(a) * b),
+            (Self::Float(a), Self::Float(b)) => Self::Float(a * b),
         }
     }
 }
 
 impl ::core::ops::BitAnd for Number {
-    type Output = Number;
-    fn bitand(self, rhs: Number) -> Number {
+    type Output = Self;
+    fn bitand(self, rhs: Self) -> Self {
         match (self, rhs) {
-            (Number::Integer(a), Number::Integer(b)) => Number::Integer(a & b),
+            (Self::Integer(a), Self::Integer(b)) => Self::Integer(a & b),
             _ => unreachable!("Did not get two integers for bitwise and."),
         }
     }
 }
 
 impl ::core::ops::BitOr for Number {
-    type Output = Number;
-    fn bitor(self, rhs: Number) -> Number {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self {
         match (self, rhs) {
-            (Number::Integer(a), Number::Integer(b)) => Number::Integer(a | b),
+            (Self::Integer(a), Self::Integer(b)) => Self::Integer(a | b),
             _ => unreachable!("Did not get two integers for bitwise or."),
         }
     }
 }
 
 impl ::core::ops::BitXor for Number {
-    type Output = Number;
-    fn bitxor(self, rhs: Number) -> Number {
+    type Output = Self;
+    fn bitxor(self, rhs: Self) -> Self {
         match (self, rhs) {
-            (Number::Integer(a), Number::Integer(b)) => Number::Integer(a ^ b),
+            (Self::Integer(a), Self::Integer(b)) => Self::Integer(a ^ b),
             _ => unreachable!("Did not get two integers for bitwise xor."),
         }
     }
 }
 
 impl ::core::ops::Rem for Number {
-    type Output = Number;
-    fn rem(self, rhs: Number) -> Number {
+    type Output = Self;
+    fn rem(self, rhs: Self) -> Self {
         match (self, rhs) {
-            (Number::Integer(a), Number::Integer(b)) => Number::Integer(a % b),
-            (Number::Float(a), Number::Integer(b)) => Number::Float(a % ias_f64(b)),
-            (Number::Integer(a), Number::Float(b)) => Number::Float(ias_f64(a) % b),
-            (Number::Float(a), Number::Float(b)) => Number::Float(a % b),
+            (Self::Integer(a), Self::Integer(b)) => Self::Integer(a % b),
+            (Self::Float(a), Self::Integer(b)) => Self::Float(a % ias_f64(b)),
+            (Self::Integer(a), Self::Float(b)) => Self::Float(ias_f64(a) % b),
+            (Self::Float(a), Self::Float(b)) => Self::Float(a % b),
         }
     }
 }
@@ -217,8 +217,8 @@ pub enum Upvalue {
 impl Upvalue {
     pub fn as_open(&self) -> usize {
         match self {
-            Upvalue::Open(n) => *n,
-            Upvalue::Closed(_) => unreachable!("Only call as_open on a known open upvalue!"),
+            Self::Open(n) => *n,
+            Self::Closed(_) => unreachable!("Only call as_open on a known open upvalue!"),
         }
     }
 }
@@ -238,9 +238,9 @@ impl PartialEq for Closure {
 }
 
 impl Closure {
-    pub fn new(function: FunctionId) -> Closure {
+    pub fn new(function: FunctionId) -> Self {
         let upvalue_count = function.upvalue_count;
-        Closure {
+        Self {
             function,
             upvalues: Vec::with_capacity(upvalue_count),
             upvalue_count,
@@ -249,107 +249,107 @@ impl Closure {
 }
 
 impl Value {
-    pub fn closure(function: FunctionId) -> Value {
+    pub fn closure(function: FunctionId) -> Self {
         let upvalue_count = function.upvalue_count;
-        Value::Closure(Closure {
+        Self::Closure(Closure {
             function,
             upvalues: Vec::with_capacity(upvalue_count),
             upvalue_count,
         })
     }
 
-    pub fn bound_method(receiver: ValueId, method: ValueId) -> Value {
-        Value::BoundMethod(BoundMethod { receiver, method })
+    pub fn bound_method(receiver: ValueId, method: ValueId) -> Self {
+        Self::BoundMethod(BoundMethod { receiver, method })
     }
 }
 
 impl From<bool> for Value {
     fn from(b: bool) -> Self {
-        Value::Bool(b)
+        Self::Bool(b)
     }
 }
 
 impl From<f64> for Value {
     fn from(f: f64) -> Self {
-        Value::Number(f.into())
+        Self::Number(f.into())
     }
 }
 
 impl From<i64> for Value {
     fn from(f: i64) -> Self {
-        Value::Number(f.into())
+        Self::Number(f.into())
     }
 }
 
 impl From<StringId> for Value {
     fn from(s: StringId) -> Self {
-        Value::String(s)
+        Self::String(s)
     }
 }
 
 impl From<FunctionId> for Value {
     fn from(f: FunctionId) -> Self {
-        Value::Function(f)
+        Self::Function(f)
     }
 }
 
 impl From<Closure> for Value {
     fn from(c: Closure) -> Self {
-        Value::Closure(c)
+        Self::Closure(c)
     }
 }
 
 impl From<Class> for Value {
     fn from(c: Class) -> Self {
-        Value::Class(c)
+        Self::Class(c)
     }
 }
 
 impl From<Instance> for Value {
     fn from(i: Instance) -> Self {
-        Value::Instance(i)
+        Self::Instance(i)
     }
 }
 
 impl From<Number> for Value {
     fn from(n: Number) -> Self {
-        Value::Number(n)
+        Self::Number(n)
     }
 }
 
 impl From<List> for Value {
     fn from(l: List) -> Self {
-        Value::List(l)
+        Self::List(l)
     }
 }
 
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Value::Bool(bool) => f.pad(&format!("{bool}")),
-            Value::Number(num) => f.pad(&format!("{num}")),
-            Value::Nil => f.pad("nil"),
-            Value::String(s) => f.pad(s),
-            Value::Function(function_id) => f.pad(&format!("<fn {}>", *function_id.name)),
-            Value::Closure(closure) => f.pad(&format!("<fn {}>", *closure.function.name)),
-            Value::NativeFunction(fun) => f.pad(&format!("<native fn {}>", *fun.name)),
-            Value::NativeMethod(method) => f.pad(&format!(
+            Self::Bool(bool) => f.pad(&format!("{bool}")),
+            Self::Number(num) => f.pad(&format!("{num}")),
+            Self::Nil => f.pad("nil"),
+            Self::String(s) => f.pad(s),
+            Self::Function(function_id) => f.pad(&format!("<fn {}>", *function_id.name)),
+            Self::Closure(closure) => f.pad(&format!("<fn {}>", *closure.function.name)),
+            Self::NativeFunction(fun) => f.pad(&format!("<native fn {}>", *fun.name)),
+            Self::NativeMethod(method) => f.pad(&format!(
                 "<native method {} of class {}>",
                 *method.name, *method.class
             )),
-            Value::Upvalue(_) => f.pad("upvalue"),
-            Value::Class(c) => f.pad(&format!("<class {}>", *c.name)),
-            Value::Instance(instance) => f.pad(&format!(
+            Self::Upvalue(_) => f.pad("upvalue"),
+            Self::Class(c) => f.pad(&format!("<class {}>", *c.name)),
+            Self::Instance(instance) => f.pad(&format!(
                 "<{} instance>",
                 *(*instance.class).as_class().name
             )),
-            Value::BoundMethod(method) => f.pad(&format!(
+            Self::BoundMethod(method) => f.pad(&format!(
                 "<bound method {}.{} of {}>",
                 *method.receiver_class_name(),
                 *method.method_name(),
                 *method.receiver,
             )),
-            Value::List(list) => f.pad(&{
+            Self::List(list) => f.pad(&{
                 let items = &list.items;
                 let mut comma_separated = String::new();
                 comma_separated.push('[');
@@ -375,28 +375,28 @@ impl Value {
 
     pub fn as_closure(&self) -> &Closure {
         match self {
-            Value::Closure(c) => c,
+            Self::Closure(c) => c,
             _ => unreachable!("Expected Closure, found `{}`", self),
         }
     }
 
     pub fn as_native_method(&self) -> &NativeMethod {
         match self {
-            Value::NativeMethod(n) => n,
+            Self::NativeMethod(n) => n,
             _ => unreachable!("Expected Native, found `{}`", self),
         }
     }
 
     pub fn as_function(&self) -> &FunctionId {
         match self {
-            Value::Function(f) => f,
+            Self::Function(f) => f,
             _ => unreachable!("Expected Function, found `{}`", self),
         }
     }
 
     pub fn as_class(&self) -> &Class {
         match self {
-            Value::Class(c) => c,
+            Self::Class(c) => c,
             _ => unreachable!("Expected Class, found `{}`", self),
         }
     }
@@ -410,36 +410,36 @@ impl Value {
 
     pub fn as_instance_mut(&mut self) -> &mut Instance {
         match self {
-            Value::Instance(i) => i,
+            Self::Instance(i) => i,
             _ => unreachable!("Expected Instance, found `{}`", self),
         }
     }
 
     pub fn as_class_mut(&mut self) -> &mut Class {
         match self {
-            Value::Class(c) => c,
+            Self::Class(c) => c,
             _ => unreachable!("Expected Class, found `{}`", self),
         }
     }
 
     pub fn upvalue_location(&self) -> &Upvalue {
         match self {
-            Value::Upvalue(v) => v,
+            Self::Upvalue(v) => v,
             _ => unreachable!("Expected upvalue, found `{}`", self),
         }
     }
 
     pub fn upvalue_location_mut(&mut self) -> &mut Upvalue {
         match self {
-            Value::Upvalue(v) => v,
+            Self::Upvalue(v) => v,
             _ => unreachable!("Expected upvalue, found `{}`", self),
         }
     }
 
     pub fn class_name(&self) -> StringId {
         match &self {
-            Value::Instance(instance) => instance.class.as_class().name,
-            Value::List(list) => list.class.as_class().name,
+            Self::Instance(instance) => instance.class.as_class().name,
+            Self::List(list) => list.class.as_class().name,
             x => unreachable!(
                 "Only instances and lists currently have classes. Got `{}`",
                 x
@@ -524,7 +524,7 @@ pub struct Class {
 impl Class {
     #[must_use]
     pub fn new(name: StringId, is_native: bool) -> Self {
-        Class {
+        Self {
             name,
             methods: HashMap::default(),
             is_native,
@@ -543,7 +543,7 @@ pub struct Instance {
 impl Instance {
     #[must_use]
     pub fn new(class: ValueId) -> Self {
-        Instance {
+        Self {
             class,
             fields: HashMap::default(),
         }
@@ -597,7 +597,7 @@ pub struct List {
 impl List {
     #[must_use]
     pub fn new(array_class: ValueId) -> Self {
-        List {
+        Self {
             items: Vec::new(),
             class: array_class,
         }
